@@ -2,7 +2,7 @@
 
 Safety-aware fitness coach acting on human skeleton sequences.
 
-## 🚀 Quick Start Guide
+## Quick Start Guide
 
 Follow these steps to set up and run the project.
 
@@ -66,6 +66,32 @@ poetry run python scripts/test_loader.py
 # Test Kinetics Loader
 poetry run python scripts/test_kinetics.py
 ```
+#### Step 4: Full Training (NTU120)
+Train the full Skeleton Transformer on the official `xsub` split.
+
+```bash
+# Run full training (defaults to 50 epochs)
+poetry run python scripts/train_full_ntu.py
+
+# Verify with a small run
+poetry run python scripts/train_full_ntu.py --debug
+```
+*Output:* Checkpoints saved to `outputs/ntu120_baseline/checkpoint.pt` and metrics to `metrics.json`.
+
+#### Step 5: Evaluate Uncertainty & Robustness
+After training, run the evaluation suite to analyze model reliability.
+
+```bash
+# 1. MC Dropout Evaluation (ECE, Reliability Diagrams)
+poetry run python scripts/eval_mc_dropout.py
+
+# 2. Uncertainty-aware Gating Sweep (Risk-Coverage Analysis)
+poetry run python scripts/run_gating_sweep.py
+
+# 3. Stress Tests (Joint Dropout & Jitter)
+poetry run python scripts/stress_tests.py
+```
+*Output:* Plots and figures generated in `outputs/figs/`.
 
 ---
 
@@ -73,8 +99,13 @@ poetry run python scripts/test_kinetics.py
 
 - **`src/gymbuddy/`**: Main source code.
   - **`data/loaders/`**: Dataset implementations (`ntu120.py`, `kinetics_skeleton.py`).
-  - **`models/`**: Neural network models (`baseline.py`).
+  - **`models/`**: Neural network models (`baseline.py`, `transformer.py`).
+  - **`uncertainty/`**: Uncertainty estimation modules (`mc_dropout.py`).
 - **`scripts/`**: Helper scripts for inspection, training, and testing.
+  - `train_full_ntu.py`: Main training script.
+  - `eval_mc_dropout.py`: Uncertainty evaluation.
+  - `run_gating_sweep.py`: Feedback gating analysis.
+  - `stress_tests.py`: Robustness evaluation.
 - **`data/`**: Directory for storing raw and processed datasets.
 
 ---

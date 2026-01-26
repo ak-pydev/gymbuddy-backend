@@ -5,11 +5,13 @@ from torch.utils.data import Dataset
 import os
 
 class NTU120Dataset(Dataset):
-    def __init__(self, data_path='data/raw/skeleton/ntu120/ntu120_3d.pkl', target_frames=60):
+    def __init__(self, data_path='data/raw/skeleton/ntu120/ntu120_3d.pkl', target_frames=60, split='xsub_train'):
         """
         Args:
             data_path (str): Path to the .pkl file.
             target_frames (int): Number of frames to sample/pad to.
+            split (str): Split name (e.g., 'xsub_train', 'xsub_val', 'xview_train', 'xview_val').
+                         If None, loads all data.
         """
         if not os.path.exists(data_path):
             raise FileNotFoundError(f"Data file not found at {data_path}")
@@ -20,12 +22,26 @@ class NTU120Dataset(Dataset):
         with open(data_path, 'rb') as f:
             data = pickle.load(f)
             
-        self.samples = data.get('annotations', [])
+        all_annotations = data.get('annotations', [])
         # If 'annotations' key missing, try to use data directly if it's a list
-        if not self.samples and isinstance(data, list):
-            self.samples = data
+        if not all_annotations and isinstance(data, list):
+            all_annotations = data
             
-        print(f"Loaded {len(self.samples)} samples.")
+        # Handle Splits
+        if split is not None and 'split' in data:
+            if split not in data['split']:
+                raise ValueError(f"Split '{split}' not found in dataset. Available: {data['split'].keys()}")
+            
+            split_ids = set(data['split'][split])
+            print(f"Filtering for split '{split}' with {len(split_ids)} samples...")
+            
+            self.samples = [ann for ann in all_annotations if ann['frame_dir'] in split_ids]
+        else:
+            if split is not None:
+                print(f"Warning: Split '{split}' requested but no split info found or data keys missing. Using all data.")
+            self.samples = all_annotations
+            
+        print(f"Loaded {len(self.samples)} samples for split '{split}'.")
 
     def __len__(self):
         return len(self.samples)
