@@ -175,6 +175,24 @@ Create a separate job for evaluation after training completes.
 
    # Run Evaluation
    $PY scripts/eval_mc_dropout.py --n_passes 20
+   
+   # Generates: $OUTPUT_DIR/ntu120_xsub_mc.npz (ensure your script saves here)
+   # Or adjust paths. The following commands assume the output is at:
+   # $OUTPUT_DIR/ntu120_xsub_transformer/mc_outputs.npz
+   
+   # For this example, let's assume eval_mc_dropout.py output to:
+   # $OUTPUT_DIR/ntu120_xsub_transformer/mc_outputs.npz
+   
+   # 1. Calibration Plots
+   $PY scripts/make_calibration_plots.py \
+     --mc_file "$OUTPUT_DIR/ntu120_xsub_transformer/mc_outputs.npz" \
+     --out_dir "$OUTPUT_DIR/figs"
+
+   # 2. Gating Sweep
+   $PY scripts/run_gating_sweep.py \
+     --mc_file "$OUTPUT_DIR/ntu120_xsub_transformer/mc_outputs.npz" \
+     --out_csv "$OUTPUT_DIR/ntu120_xsub_transformer/gating_sweep.csv" \
+     --out_fig "$OUTPUT_DIR/figs/coverage_risk_curve.png"
    ```
 
 3. **Submit:**

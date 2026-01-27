@@ -1,18 +1,30 @@
+import argparse
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import csv
 
 def run_sweep():
-    results_path = "outputs/uncertainty/ntu120_xsub_mc.npz"
-    output_dir = "outputs/gating"
-    os.makedirs(output_dir, exist_ok=True)
+    parser = argparse.ArgumentParser(description='Run gating sweep and generate risk-coverage curve')
+    parser.add_argument('--mc_file', type=str, required=True, help='Path to MC dropout .npz output')
+    parser.add_argument('--out_csv', type=str, required=True, help='Path to save sweep CSV')
+    parser.add_argument('--out_fig', type=str, required=True, help='Path to save coverage-risk figure')
+    args = parser.parse_args()
+
+    results_path = args.mc_file
+    csv_path = args.out_csv
+    fig_path = args.out_fig
+    
+    # Create parent dirs if needed
+    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+    os.makedirs(os.path.dirname(fig_path), exist_ok=True)
     
     if not os.path.exists(results_path):
-        print(f"Results not found at {results_path}. Run eval_mc_dropout.py first.")
+        print(f"Results not found at {results_path}")
         return
     
+    print(f"Loading {results_path}...")
     data = np.load(results_path)
-    # Keys: p_mean, u_epistemic, y_true...
     probs = data['p_mean']
     uncertainty = data['u_epistemic']
     labels = data['y_true']
@@ -34,7 +46,6 @@ def run_sweep():
     risks = [] 
     
     for t in thresholds:
-        # Policy: keep if u <= t
         keep_mask = uncertainty <= t
         n_covered = np.sum(keep_mask)
         
@@ -42,12 +53,8 @@ def run_sweep():
             continue
             
         coverage = n_covered / total_samples
-        
-        # Risk: Error rate on covered
         risk = np.mean(incorrect[keep_mask])
         
-        # Wrong-and-spoke: Fraction of total samples where model was WRONG but CONFIDENT (passed gate)
-        # This is a proxy for unsafe actions.
         n_unsafe = np.sum(incorrect & keep_mask)
         unsafe_rate = n_unsafe / total_samples
         
@@ -65,13 +72,13 @@ def run_sweep():
         })
         
     # Save CSV
-    import csv
-    csv_path = os.path.join(output_dir, "gating_sweep.csv")
     with open(csv_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["threshold", "coverage", "risk_on_covered", "unsafe_rate", "accuracy_covered"])
         writer.writeheader()
         writer.writerows(results)
-        
+    
+    print(f"Sweep results saved to {csv_path}")
+
     # Plot Coverage vs Risk
     plt.figure()
     plt.plot(coverages, risks, "b-", linewidth=2)
@@ -81,10 +88,10 @@ def run_sweep():
     plt.grid(True)
     plt.xlim(0, 1)
     plt.ylim(0, max(risks) + 0.1)
-    plt.savefig(os.path.join(output_dir, "coverage_risk_curve.png"))
+    plt.savefig(fig_path)
     plt.close()
     
-    print(f"Gating Sweep Complete. Results saved to {output_dir}")
+    print(f"Plot saved to {fig_path}")
 
 if __name__ == "__main__":
     run_sweep()

@@ -45,15 +45,20 @@ def compute_ece(probs, labels, n_bins=10):
             
     return ece, (accs, confs, counts)
 
-def eval_mc(debug=False):
+def eval_mc(debug=False, out_file=None):
     device = 'mps' if torch.backends.mps.is_available() else 'cpu'
     
     # Path to baseline checkpoint
     checkpoint_path = "outputs/ntu120_xsub_baseline/best.pt"
     # Output path for uncertainty stats
-    output_dir = "outputs/uncertainty"
-    os.makedirs(output_dir, exist_ok=True)
-    output_file = os.path.join(output_dir, "ntu120_xsub_mc.npz")
+    
+    if out_file is None:
+        output_dir = "outputs/uncertainty"
+        os.makedirs(output_dir, exist_ok=True)
+        output_file = os.path.join(output_dir, "ntu120_xsub_mc.npz")
+    else:
+        output_file = out_file
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
     
     if not os.path.exists(checkpoint_path):
         print(f"Checkpoint not found at {checkpoint_path}. Run training first.")
@@ -65,6 +70,7 @@ def eval_mc(debug=False):
         else:
              return
 
+    # ... (rest of loading logic same) ...
     # Load Model (Ensure d_model match)
     model = SkeletonTransformer(num_classes=120, d_model=256, nhead=4, num_layers=4, dropout=0.5)
     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
@@ -100,5 +106,6 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--debug', action='store_true', help='Run on a small subset')
+    parser.add_argument('--out_file', type=str, default=None, help='Path to save output .npz file')
     args = parser.parse_args()
-    eval_mc(debug=args.debug)
+    eval_mc(debug=args.debug, out_file=args.out_file)
