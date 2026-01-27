@@ -70,28 +70,38 @@ poetry run python scripts/test_kinetics.py
 Train the full Skeleton Transformer on the official `xsub` split.
 
 ```bash
+#### Step 4: Full Training (NTU120)
+Train the full Skeleton Transformer on the official `xsub` split.
+
+```bash
 # Run full training (defaults to 50 epochs)
 poetry run python scripts/train_full_ntu.py
-
-# Verify with a small run
-poetry run python scripts/train_full_ntu.py --debug
 ```
-*Output:* Checkpoints saved to `outputs/ntu120_baseline/checkpoint.pt` and metrics to `metrics.json`.
+*Output:* 
+- `outputs/ntu120_xsub_baseline/best.pt` (Best Checkpoint)
+- `outputs/ntu120_xsub_baseline/train_curve.csv` (Learning Curve)
+- `outputs/ntu120_xsub_baseline/metrics.json`
 
 #### Step 5: Evaluate Uncertainty & Robustness
 After training, run the evaluation suite to analyze model reliability.
 
 ```bash
-# 1. MC Dropout Evaluation (ECE, Reliability Diagrams)
+# 1. MC Dropout Inference (Saves .npz stats)
 poetry run python scripts/eval_mc_dropout.py
+# Output: outputs/uncertainty/ntu120_xsub_mc.npz
 
-# 2. Uncertainty-aware Gating Sweep (Risk-Coverage Analysis)
+# 2. Generate Figures (Reliability, ECE, Error vs Uncertainty)
+poetry run python scripts/make_figures.py
+# Output: outputs/figs/*.png, ece.json
+
+# 3. Uncertainty-aware Gating Sweep
 poetry run python scripts/run_gating_sweep.py
+# Output: outputs/gating/gating_sweep.csv (Coverage, Risk, Unsafe Rate)
 
-# 3. Stress Tests (Joint Dropout & Jitter)
+# 4. Stress Tests (Joint Dropout, Jitter, xView Shift)
 poetry run python scripts/stress_tests.py
+# Output: outputs/stress_robustness.csv
 ```
-*Output:* Plots and figures generated in `outputs/figs/`.
 
 ---
 
@@ -103,7 +113,8 @@ poetry run python scripts/stress_tests.py
   - **`uncertainty/`**: Uncertainty estimation modules (`mc_dropout.py`).
 - **`scripts/`**: Helper scripts for inspection, training, and testing.
   - `train_full_ntu.py`: Main training script.
-  - `eval_mc_dropout.py`: Uncertainty evaluation.
+  - `eval_mc_dropout.py`: Uncertainty inference.
+  - `make_calibration_plots.py`: Calibration plotting.
   - `run_gating_sweep.py`: Feedback gating analysis.
   - `stress_tests.py`: Robustness evaluation.
 - **`data/`**: Directory for storing raw and processed datasets.

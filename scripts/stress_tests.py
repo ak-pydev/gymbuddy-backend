@@ -30,10 +30,10 @@ def apply_jitter(x, std=0.0):
 
 def run_stress_test():
     device = 'mps' if torch.backends.mps.is_available() else 'cpu'
-    checkpoint_path = "outputs/ntu120_baseline/checkpoint.pt"
+    checkpoint_path = "outputs/ntu120_xsub_baseline/checkpoint.pt"
     
     if not os.path.exists(checkpoint_path):
-        print("Checkpoint not found.")
+        print(f"Checkpoint not found at {checkpoint_path}")
         return
 
     # Load Model
@@ -171,9 +171,54 @@ def run_stress_test():
     ax2.plot(stds, j_uncs, color='tab:red', marker='x')
     ax2.tick_params(axis='y', labelcolor='tab:red')
     
-    plt.title("Stress Test: Gaussian Jitter")
-    plt.savefig("outputs/figs/stress_jitter.png")
-    plt.close()
+    # 3. Domain Shift: Evaluation on xview split (Cross-View)
+    print("Running Domain Shift Evaluation (xview)...")
+    try:
+        xview_ds = NTU120Dataset(split='xview_val', target_frames=60)
+        xview_loader = DataLoader(xview_ds, batch_size=32, shuffle=False)
+        
+        all_acc = []
+        all_u = []
+        
+        # MC Eval Loop for xview
+        # Enable dropout
+        instances_dropout = [m for m in model.modules() if m.__class__.__name__.startswith('Dropout')]
+        for m in instances_dropout: m.train()
+            
+        with torch.no_grad():
+            for batch in xview_loader:
+                 x = batch['x'].to(device)
+                 y = batch['y'].to(device)
+                 
+                 batch_probs = []
+                 for _ in range(10):
+                     out = model(x)
+                     batch_probs.append(torch.softmax(out, dim=1).unsqueeze(0))
+                     
+                 mean_probs = torch.cat(batch_probs, dim=0).mean(dim=0)
+                 variance = torch.cat(batch_probs, dim=0).var(dim=0).mean(dim=1)
+                 
+                 preds = mean_probs.argmax(dim=1)
+                 acc = (preds == y).float().mean().item()
+                 
+                 all_acc.append(acc)
+                 all_u.append(variance.mean().item())
+        
+        xview_acc = np.mean(all_acc)
+        xview_u = np.mean(all_u)
+        print(f"  xView (OOD): Acc={xview_acc:.4f}, Unc={xview_u:.4f}")
+        
+        # Save to table
+        with open("outputs/stress_robustness.csv", "w") as f:
+            f.write("test_type,param,acc,uncertainty\n")
+            for p, a, u in zip(probs, d_accs, d_uncs):
+                f.write(f"joint_dropout,{p},{a:.4f},{u:.4f}\n")
+            for s, a, u in zip(stds, j_accs, j_uncs):
+                f.write(f"jitter,{s},{a:.4f},{u:.4f}\n")
+            f.write(f"domain_shift,xview,{xview_acc:.4f},{xview_u:.4f}\n")
+            
+    except Exception as e:
+        print(f"Skipping xview run (dataset maybe missing): {e}")
 
 if __name__ == "__main__":
     run_stress_test()

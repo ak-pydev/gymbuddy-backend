@@ -47,76 +47,48 @@ def compute_ece(probs, labels, n_bins=10):
 
 def eval_mc():
     device = 'mps' if torch.backends.mps.is_available() else 'cpu'
-    checkpoint_path = "outputs/ntu120_baseline/checkpoint.pt"
+    
+    # Path to baseline checkpoint
+    checkpoint_path = "outputs/ntu120_xsub_baseline/best.pt"
+    # Output path for uncertainty stats
+    output_dir = "outputs/uncertainty"
+    os.makedirs(output_dir, exist_ok=True)
+    output_file = os.path.join(output_dir, "ntu120_xsub_mc.npz")
     
     if not os.path.exists(checkpoint_path):
-        print("Checkpoint not found. Run training first.")
-        # Create dummy for code check if needed, but here we assume flow.
-        return
+        print(f"Checkpoint not found at {checkpoint_path}. Run training first.")
+        # Try fallback
+        old_path = "outputs/ntu120_xsub_baseline/checkpoint.pt"
+        if os.path.exists(old_path):
+             print(f"Found checkpoint at old path name {old_path}, utilizing.")
+             checkpoint_path = old_path
+        else:
+             return
 
-    # Load Config (Assume default or load json)
-    # Using hardcoded roughly matching train script
+    # Load Model (Ensure d_model match)
     model = SkeletonTransformer(num_classes=120, d_model=256, nhead=4, num_layers=4, dropout=0.5)
     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     model.to(device)
     
     # Dataset (Val)
+    print("Initializing Validation Dataset...")
     val_ds = NTU120Dataset(split='xsub_val', target_frames=60)
-    # For quick eval, maybe subset? But prompt says "paper-ready evaluation".
     val_loader = DataLoader(val_ds, batch_size=32, shuffle=False)
     
-    print("Running MC Dropout Prediction...")
-    probs, uncertainty, labels = predict_mc(model, val_loader, n_passes=10, device=device)
+    print(f"Running MC Dropout Prediction (N=20)...")
+    probs, uncertainty, labels = predict_mc(model, val_loader, n_passes=20, device=device)
     
-    # 1. ECE
-    ece, (accs, confs, counts) = compute_ece(probs, labels)
-    print(f"MC Dropout ECE: {ece:.4f}")
-    
-    # 2. Plots
-    os.makedirs("outputs/figs", exist_ok=True)
-    
-    # Reliability Diagram
-    plt.figure()
-    plt.plot([0, 1], [0, 1], "k--", label="Perfect Calibration")
-    plt.scatter(confs, accs, s=np.array(counts)/np.sum(counts)*1000, alpha=0.5) # Size proportional to count
-    plt.plot(confs, accs, "r-", label="Model")
-    plt.xlabel("Confidence")
-    plt.ylabel("Accuracy")
-    plt.title(f"Reliability Diagram (ECE={ece:.3f})")
-    plt.legend()
-    plt.savefig("outputs/figs/reliability_diagram.png")
-    plt.close()
-    
-    # Uncertainty vs Error
-    # Bin samples by uncertainty
-    preds = np.argmax(probs, axis=1)
-    errors = (preds != labels).astype(int)
-    
-    # Sort by uncertainty
-    sorted_indices = np.argsort(uncertainty)
-    uncertainty_sorted = uncertainty[sorted_indices]
-    errors_sorted = errors[sorted_indices]
-    
-    # Sliding window or bins
-    n_bins_u = 10
-    u_bins = np.array_split(uncertainty_sorted, n_bins_u)
-    e_bins = np.array_split(errors_sorted, n_bins_u)
-    
-    mean_u = [np.mean(b) for b in u_bins]
-    mean_e = [np.mean(b) for b in e_bins]
-    
-    plt.figure()
-    plt.plot(mean_u, mean_e, "o-")
-    plt.xlabel("Predictive Uncertainty (Variance)")
-    plt.ylabel("Error Rate")
-    plt.title("Uncertainty vs Error")
-    plt.grid(True)
-    plt.savefig("outputs/figs/uncertainty_vs_error.png")
-    plt.close()
+    # Compute predictions (y_pred) from mean probabilities
+    y_pred = np.argmax(probs, axis=1)
     
     # Save raw results
-    np.savez("outputs/ntu120_baseline/mc_results.npz", probs=probs, uncertainty=uncertainty, labels=labels)
-    print("Evaluation Complete. Results saved.")
+    print(f"Saving results to {output_file}...")
+    np.savez(output_file, 
+             p_mean=probs, 
+             u_epistemic=uncertainty, 
+             y_true=labels, 
+             y_pred=y_pred)
+    print("Inference Complete.")
 
 if __name__ == "__main__":
     eval_mc()
