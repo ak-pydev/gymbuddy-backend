@@ -45,7 +45,7 @@ def compute_ece(probs, labels, n_bins=10):
             
     return ece, (accs, confs, counts)
 
-def eval_mc():
+def eval_mc(debug=False):
     device = 'mps' if torch.backends.mps.is_available() else 'cpu'
     
     # Path to baseline checkpoint
@@ -73,6 +73,12 @@ def eval_mc():
     # Dataset (Val)
     print("Initializing Validation Dataset...")
     val_ds = NTU120Dataset(split='xsub_val', target_frames=60)
+    
+    if debug:
+        print("DEBUG MODE: Using subset of 50 samples")
+        indices = np.random.choice(len(val_ds), 50, replace=False)
+        val_ds = torch.utils.data.Subset(val_ds, indices)
+        
     val_loader = DataLoader(val_ds, batch_size=32, shuffle=False)
     
     print(f"Running MC Dropout Prediction (N=20)...")
@@ -91,4 +97,8 @@ def eval_mc():
     print("Inference Complete.")
 
 if __name__ == "__main__":
-    eval_mc()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--debug', action='store_true', help='Run on a small subset')
+    args = parser.parse_args()
+    eval_mc(debug=args.debug)

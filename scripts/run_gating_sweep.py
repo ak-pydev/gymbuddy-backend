@@ -1,3 +1,7 @@
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+
 def run_sweep():
     results_path = "outputs/uncertainty/ntu120_xsub_mc.npz"
     output_dir = "outputs/gating"

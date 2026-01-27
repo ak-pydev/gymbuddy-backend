@@ -28,9 +28,9 @@ def apply_jitter(x, std=0.0):
     noise = torch.randn_like(x) * std
     return x + noise
 
-def run_stress_test():
+def run_stress_test(debug=False):
     device = 'mps' if torch.backends.mps.is_available() else 'cpu'
-    checkpoint_path = "outputs/ntu120_xsub_baseline/checkpoint.pt"
+    checkpoint_path = "outputs/ntu120_xsub_baseline/best.pt"
     
     if not os.path.exists(checkpoint_path):
         print(f"Checkpoint not found at {checkpoint_path}")
@@ -43,7 +43,10 @@ def run_stress_test():
     
     # Dataset - Use small subset for speed
     full_ds = NTU120Dataset(split='xsub_val', target_frames=60)
-    indices = np.random.choice(len(full_ds), 500, replace=False)
+    n_samples = 50 if debug else 500
+    if len(full_ds) < n_samples: n_samples = len(full_ds)
+    
+    indices = np.random.choice(len(full_ds), n_samples, replace=False)
     ds = Subset(full_ds, indices)
     loader = DataLoader(ds, batch_size=32, shuffle=False)
     
@@ -52,7 +55,7 @@ def run_stress_test():
     d_accs = []
     d_uncs = []
     
-    print("Running Joint Dropout Stress Test...")
+    print(f"Running Joint Dropout Stress Test (N={n_samples})...")
     for p in probs:
         # Wrap loader or transform batch manually?
         # Helper to run predict_mc with corruption
@@ -104,7 +107,7 @@ def run_stress_test():
     j_accs = []
     j_uncs = []
     
-    print("Running Jitter Stress Test...")
+    print(f"Running Jitter Stress Test (N={n_samples})...")
     for s in stds:
         all_acc = []
         all_u = []
@@ -171,22 +174,28 @@ def run_stress_test():
     ax2.plot(stds, j_uncs, color='tab:red', marker='x')
     ax2.tick_params(axis='y', labelcolor='tab:red')
     
-    # 3. Domain Shift: Evaluation on xview split (Cross-View)
-    print("Running Domain Shift Evaluation (xview)...")
+    # 3. Domain Shift: Evaluation on xset split (Cross-Setup)
+    print("Running Domain Shift Evaluation (xset)...")
     try:
-        xview_ds = NTU120Dataset(split='xview_val', target_frames=60)
-        xview_loader = DataLoader(xview_ds, batch_size=32, shuffle=False)
+        xset_ds = NTU120Dataset(split='xset_val', target_frames=60)
+        
+        if debug:
+             print("DEBUG: Using xset subset")
+             indices = np.random.choice(len(xset_ds), 50, replace=False)
+             xset_ds = Subset(xset_ds, indices)
+             
+        xset_loader = DataLoader(xset_ds, batch_size=32, shuffle=False)
         
         all_acc = []
         all_u = []
         
-        # MC Eval Loop for xview
+        # MC Eval Loop for xset
         # Enable dropout
         instances_dropout = [m for m in model.modules() if m.__class__.__name__.startswith('Dropout')]
         for m in instances_dropout: m.train()
             
         with torch.no_grad():
-            for batch in xview_loader:
+            for batch in xset_loader:
                  x = batch['x'].to(device)
                  y = batch['y'].to(device)
                  
@@ -204,9 +213,9 @@ def run_stress_test():
                  all_acc.append(acc)
                  all_u.append(variance.mean().item())
         
-        xview_acc = np.mean(all_acc)
-        xview_u = np.mean(all_u)
-        print(f"  xView (OOD): Acc={xview_acc:.4f}, Unc={xview_u:.4f}")
+        xset_acc = np.mean(all_acc)
+        xset_u = np.mean(all_u)
+        print(f"  xSet (OOD): Acc={xset_acc:.4f}, Unc={xset_u:.4f}")
         
         # Save to table
         with open("outputs/stress_robustness.csv", "w") as f:
@@ -215,10 +224,14 @@ def run_stress_test():
                 f.write(f"joint_dropout,{p},{a:.4f},{u:.4f}\n")
             for s, a, u in zip(stds, j_accs, j_uncs):
                 f.write(f"jitter,{s},{a:.4f},{u:.4f}\n")
-            f.write(f"domain_shift,xview,{xview_acc:.4f},{xview_u:.4f}\n")
+            f.write(f"domain_shift,xset,{xset_acc:.4f},{xset_u:.4f}\n")
             
     except Exception as e:
-        print(f"Skipping xview run (dataset maybe missing): {e}")
+        print(f"Skipping xset run (dataset maybe missing): {e}")
 
 if __name__ == "__main__":
-    run_stress_test()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--debug', action='store_true', help='Run verification with fewer samples')
+    args = parser.parse_args()
+    run_stress_test(debug=args.debug)
