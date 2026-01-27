@@ -3,18 +3,23 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 import os
+from pathlib import Path
 
 class NTU120Dataset(Dataset):
-    def __init__(self, data_path='data/raw/skeleton/ntu120/ntu120_3d.pkl', target_frames=60, split='xsub_train'):
+    def __init__(self, data_path=None, target_frames=60, split='xsub_train'):
         """
         Args:
-            data_path (str): Path to the .pkl file.
+            data_path (str or Path): Path to the .pkl file. If None, uses DATA_ROOT env var.
             target_frames (int): Number of frames to sample/pad to.
-            split (str): Split name (e.g., 'xsub_train', 'xsub_val', 'xview_train', 'xview_val').
-                         If None, loads all data.
+            split (str): Split name.
         """
-        if not os.path.exists(data_path):
-            raise FileNotFoundError(f"Data file not found at {data_path}")
+        if data_path is None:
+            DATA_ROOT = Path(os.environ["DATA_ROOT"])
+            data_path = DATA_ROOT / "ntu120" / "ntu120_3d.pkl"
+        else:
+            data_path = Path(data_path)
+
+        assert data_path.exists(), f"File not found: {data_path}"
         
         self.target_frames = target_frames
         

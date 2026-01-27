@@ -3,24 +3,36 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 import os
+from pathlib import Path
 
 class KineticsSkeletonDataset(Dataset):
     def __init__(self, 
-                 meta_path='data/raw/skeleton/kinetics400/k400_2d.pkl', 
-                 data_root='data/raw/skeleton/kinetics400/kpfiles', 
+                 meta_path=None, 
+                 data_root=None, 
                  target_frames=60,
                  split='train'):
         """
         Args:
-            meta_path (str): Path to k400_2d.pkl
-            data_root (str): Folder containing .pkl skeleton files.
+            meta_path (str/Path): Path to k400_2d.pkl
+            data_root (str/Path): Folder containing .pkl skeleton files.
             target_frames (int): Number of frames to sample.
             split (str): 'train' or 'val'.
         """
-        self.data_root = data_root
+        DATA_ROOT = Path(os.environ["DATA_ROOT"])
+
+        if meta_path is None:
+            meta_path = DATA_ROOT / "kinetics400" / "k400_2d.pkl"
+        else:
+            meta_path = Path(meta_path)
+            
+        if data_root is None:
+             self.data_root = DATA_ROOT / "kinetics400" / "kpfiles"
+        else:
+             self.data_root = Path(data_root)
+
         self.target_frames = target_frames
         
-        if not os.path.exists(meta_path):
+        if not meta_path.exists():
             raise FileNotFoundError(f"Meta file not found at {meta_path}")
             
         print(f"Loading Kinetics meta from {meta_path}...")
