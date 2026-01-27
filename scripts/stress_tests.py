@@ -30,7 +30,7 @@ def apply_jitter(x, std=0.0):
 
 def run_stress_test(debug=False):
     device = 'mps' if torch.backends.mps.is_available() else 'cpu'
-    checkpoint_path = "outputs/ntu120_xsub_baseline/best.pt"
+    checkpoint_path = "/anvil/scratch/x-akhanal3/ai-gym-buddy/outputs/ntu120_xsub_baseline/best.pt"
     
     if not os.path.exists(checkpoint_path):
         print(f"Checkpoint not found at {checkpoint_path}")
@@ -144,7 +144,9 @@ def run_stress_test(debug=False):
         print(f"  std={s}: Acc={avg_acc:.4f}, Unc={avg_u:.4f}")
 
     # Plots
-    os.makedirs("outputs/figs", exist_ok=True)
+    output_dir = "/anvil/scratch/x-akhanal3/ai-gym-buddy/outputs"
+    figs_dir = os.path.join(output_dir, "figs")
+    os.makedirs(figs_dir, exist_ok=True)
     
     # Dropout Plot
     fig, ax1 = plt.subplots()
@@ -159,7 +161,7 @@ def run_stress_test(debug=False):
     ax2.tick_params(axis='y', labelcolor='tab:red')
     
     plt.title("Stress Test: Joint Dropout")
-    plt.savefig("outputs/figs/stress_dropout.png")
+    plt.savefig(os.path.join(figs_dir, "stress_dropout.png"))
     plt.close()
 
     # Jitter Plot
@@ -218,7 +220,8 @@ def run_stress_test(debug=False):
         print(f"  xSet (OOD): Acc={xset_acc:.4f}, Unc={xset_u:.4f}")
         
         # Save to table
-        with open("outputs/stress_robustness.csv", "w") as f:
+        csv_path = os.path.join(output_dir, "stress_robustness.csv")
+        with open(csv_path, "w") as f:
             f.write("test_type,param,acc,uncertainty\n")
             for p, a, u in zip(probs, d_accs, d_uncs):
                 f.write(f"joint_dropout,{p},{a:.4f},{u:.4f}\n")

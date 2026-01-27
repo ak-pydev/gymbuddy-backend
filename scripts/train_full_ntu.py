@@ -41,7 +41,7 @@ def train_full():
     
     set_seed(CONFIG['seed'])
     # Updated output dir
-    output_dir = "outputs/ntu120_xsub_baseline"
+    output_dir = "/anvil/scratch/x-akhanal3/ai-gym-buddy/outputs/ntu120_xsub_baseline"
     os.makedirs(output_dir, exist_ok=True)
     
     # Save config

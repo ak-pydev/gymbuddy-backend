@@ -49,11 +49,11 @@ def eval_mc(debug=False, out_file=None):
     device = 'mps' if torch.backends.mps.is_available() else 'cpu'
     
     # Path to baseline checkpoint
-    checkpoint_path = "outputs/ntu120_xsub_baseline/best.pt"
+    checkpoint_path = "/anvil/scratch/x-akhanal3/ai-gym-buddy/outputs/ntu120_xsub_baseline/best.pt"
     # Output path for uncertainty stats
     
     if out_file is None:
-        output_dir = "outputs/uncertainty"
+        output_dir = "/anvil/scratch/x-akhanal3/ai-gym-buddy/outputs/uncertainty"
         os.makedirs(output_dir, exist_ok=True)
         output_file = os.path.join(output_dir, "ntu120_xsub_mc.npz")
     else:
