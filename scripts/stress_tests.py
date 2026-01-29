@@ -28,9 +28,13 @@ def apply_jitter(x, std=0.0):
     noise = torch.randn_like(x) * std
     return x + noise
 
-def run_stress_test(debug=False):
+def run_stress_test(debug=False, checkpoint_path=None, out_dir=None):
     device = 'mps' if torch.backends.mps.is_available() else 'cpu'
-    checkpoint_path = "/anvil/scratch/x-akhanal3/ai-gym-buddy/outputs/ntu120_xsub_baseline/best.pt"
+    
+    if checkpoint_path is None:
+        checkpoint_path = "/anvil/scratch/x-akhanal3/ai-gym-buddy/outputs/ntu120_xsub_baseline/best.pt"
+    if out_dir is None:
+        out_dir = "/anvil/scratch/x-akhanal3/ai-gym-buddy/outputs"
     
     if not os.path.exists(checkpoint_path):
         print(f"Checkpoint not found at {checkpoint_path}")
@@ -144,8 +148,8 @@ def run_stress_test(debug=False):
         print(f"  std={s}: Acc={avg_acc:.4f}, Unc={avg_u:.4f}")
 
     # Plots
-    output_dir = "/anvil/scratch/x-akhanal3/ai-gym-buddy/outputs"
-    figs_dir = os.path.join(output_dir, "figs")
+    # output_dir is passed as argument
+    figs_dir = os.path.join(out_dir, "figs")
     os.makedirs(figs_dir, exist_ok=True)
     
     # Dropout Plot
@@ -236,5 +240,8 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--debug', action='store_true', help='Run verification with fewer samples')
+    parser.add_argument('--checkpoint', type=str, default="/anvil/scratch/x-akhanal3/ai-gym-buddy/outputs/ntu120_xsub_baseline/best.pt", help='Path to model checkpoint')
+    parser.add_argument('--out_dir', type=str, default="/anvil/scratch/x-akhanal3/ai-gym-buddy/outputs", help='Output directory')
     args = parser.parse_args()
-    run_stress_test(debug=args.debug)
+    
+    run_stress_test(debug=args.debug, checkpoint_path=args.checkpoint, out_dir=args.out_dir)
