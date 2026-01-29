@@ -3,7 +3,7 @@ name = "gymbuddy"
 version = "0.1.0"
 description = "AI Gym Buddy"
 readme = "README.md"
-requires-python = ">=3.9,<4"
+requires-python = ">=3.11,<4"
 dependencies = [
     "torch",
     "numpy",
@@ -11,7 +11,10 @@ dependencies = [
     "wandb",
     "weave",
     "openxlab (>=0.1.3,<0.2.0)",
-    "matplotlib (<3.10)"
+    "matplotlib (<3.10)",
+    "pandas (>=3.0.0,<4.0.0)",
+    "scikit-learn (>=1.8.0,<2.0.0)",
+    "seaborn (>=0.13.2,<0.14.0)"
 ]
 
 [build-system]
