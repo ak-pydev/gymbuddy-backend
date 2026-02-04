@@ -184,7 +184,7 @@ def train_finetune(args):
         train_loader = DataLoader(tiny_ds, batch_size=32, shuffle=True)
         val_loader = DataLoader(tiny_ds, batch_size=32, shuffle=False) # validate on train
         
-    val_loader = DataLoader(tiny_ds, batch_size=32, shuffle=False) # validate on train
+
         
     # 2. Initialize Model & Load Checkpoint
     print(f"Loading checkpoint from {args.checkpoint}...")
