@@ -15,15 +15,24 @@ sys.path.append(os.path.join(os.getcwd(), 'src'))
 from gymbuddy.data.loaders.gym_dataset import GymDataset
 from gymbuddy.models.transformer import SkeletonTransformer
 
-def train_one_epoch(model, loader, criterion, optimizer, device):
+def train_one_epoch(model, loader, criterion, optimizer, device, debug_batch=False):
     model.train()
     total_loss = 0
     correct = 0
     total = 0
     
-    for batch in loader:
+    for i, batch in enumerate(loader):
         x = batch['x'].to(device)
         y = batch['y'].to(device)
+        
+        # DEBUG: Check input shape and labels once
+        if debug_batch and i == 0:
+            print(f"DEBUG Batch 0: x shape={x.shape}, y shape={y.shape}")
+            print(f"DEBUG Batch 0: y type={y.dtype}, y contents={y[:8].tolist()}")
+            if x.dim() != 4:
+                 print(f"ERROR: Expected 4D input (B, T, J, C), got {x.dim()}D {x.shape}")
+            # Ensure indices valid
+            print(f"DEBUG Batch 0: y min={y.min()}, max={y.max()}")
         
         optimizer.zero_grad()
         out = model(x)
@@ -62,9 +71,7 @@ def validate(model, loader, criterion, device):
 
 def train_finetune(args):
     # Device
-    device = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
-    if not torch.backends.mps.is_available() and torch.cuda.is_available():
-        device = torch.device('cuda')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
     
     # 1. Load FULL Dataset first to scan labels globally
@@ -152,11 +159,56 @@ def train_finetune(args):
     # Print stats of remapped
     # (Optional: could scan train_ds to show class distribution)
     
+    # DEBUG: Inspect Datasets
+    def inspect(split_name, ds, n=2000):
+        # Handle subset
+        if isinstance(ds, torch.utils.data.Subset):
+           indices = ds.indices[:n]
+           ys = [int(ds.dataset[i]['y'].item()) for i in indices]
+        else:
+           ys = [int(ds[i]['y'].item()) for i in range(min(len(ds), n))]
+           
+        u = sorted(set(ys))
+        print(f"DEBUG {split_name}: n={len(ds)} sampled={len(ys)} unique={len(u)} min={min(u) if u else 'N/A'} max={max(u) if u else 'N/A'} first10={u[:10]}")
+    
+    inspect("train", train_ds)
+    inspect("val", val_ds)
+
     train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False)
+    
+    # DEBUG: Overfit tiny subset
+    if args.debug_overfit:
+        print("!!! DEBUG MODE: Overfitting a tiny subset (64 samples) !!!")
+        tiny_ds, _ = random_split(train_ds, [64, len(train_ds)-64])
+        train_loader = DataLoader(tiny_ds, batch_size=32, shuffle=True)
+        val_loader = DataLoader(tiny_ds, batch_size=32, shuffle=False) # validate on train
         
+    val_loader = DataLoader(tiny_ds, batch_size=32, shuffle=False) # validate on train
+        
+    # 2. Initialize Model & Load Checkpoint
+    print(f"Loading checkpoint from {args.checkpoint}...")
     model = baseline_model = SkeletonTransformer(num_classes=120, d_model=256, nhead=4, num_layers=4, dropout=args.dropout)
+    
+    # Load state dict
+    try:
+        ckpt = torch.load(args.checkpoint, map_location='cpu')
+        state = ckpt['model_state_dict'] if isinstance(ckpt, dict) and 'model_state_dict' in ckpt else ckpt
+        
+        # Load params (strict=False in case of minor mismatches, though usually should match)
+        missing, unexpected = model.load_state_dict(state, strict=False)
+        print(f"Loaded checkpoint. Missing: {len(missing)}, Unexpected: {len(unexpected)}")
+        if len(missing) > 0:
+            print(f"Missing keys (example): {missing[:5]}")
+            
+    except Exception as e:
+        print(f"CRITICAL ERROR loading checkpoint: {e}")
+        return
+
+    # 3. Replace Head
     in_features = model.fc.in_features
+    print(f"Replacing head: {in_features} -> {args.num_classes}")
+    
     model.fc = nn.Linear(in_features, args.num_classes)
     model.to(device)
     
@@ -173,6 +225,12 @@ def train_finetune(args):
         
     optimizer = optim.Adam(model.fc.parameters(), lr=args.lr_head)
     
+    # DEBUG: Check trainable params
+    trainable = [(n, p.shape) for n,p in model.named_parameters() if p.requires_grad]
+    print(f"DEBUG: Trainable params (Head Only): {len(trainable)}")
+    if len(trainable) > 0:
+        print(f"DEBUG: Example trainables: {trainable[:5]}")
+    
     for epoch in range(args.epochs_head):
         train_loss, train_acc = train_one_epoch(model, train_loader, criterion, optimizer, device)
         val_loss, val_acc = validate(model, val_loader, criterion, device)
@@ -185,6 +243,10 @@ def train_finetune(args):
     for param in model.parameters():
         param.requires_grad = True
         
+    # DEBUG: Check trainable params again
+    trainable = [(n, p.shape) for n,p in model.named_parameters() if p.requires_grad]
+    print(f"DEBUG: Trainable params (Full): {len(trainable)}")
+    
     optimizer = optim.Adam(model.parameters(), lr=args.lr_full)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs_full)
     
@@ -207,6 +269,9 @@ def train_finetune(args):
     # Save final
     torch.save(model.state_dict(), os.path.join(args.out_dir, "final.pt"))
     print("Training Complete.")
+    
+    if args.debug_overfit:
+        print("DEBUG: Tiny subset training complete. Did accuracy reach ~1.0?")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -219,7 +284,8 @@ if __name__ == "__main__":
     parser.add_argument('--lr_full', type=float, default=1e-4)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--num_classes', type=int, default=None, help='Overrides auto-detection if provided')
-    parser.add_argument('--dropout', type=float, default=0.5, help='Dropout probability')
+    parser.add_argument('--dropout', type=float, default=0.1, help='Dropout probability')
+    parser.add_argument('--debug_overfit', action='store_true', help='Sanity check: overfit small subset')
     
     parser.add_argument('--epochs', type=int, default=None, help='Alias for --epochs_full')
     parser.add_argument('--lr', type=float, default=None, help='Alias for --lr_full')
