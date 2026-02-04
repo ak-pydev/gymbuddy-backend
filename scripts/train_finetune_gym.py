@@ -276,7 +276,7 @@ def train_finetune(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_path', type=str, default=None, help='Path to gym.pkl')
-    parser.add_argument('--checkpoint', type=str, required=True, help='Path to pretrained ntu120 checkpoint')
+    parser.add_argument('--checkpoint', type=str, default='/anvil/scratch/x-akhanal3/ai-gym-buddy/outputs/ntu120_xsub_baseline/best.pt', help='Path to pretrained ntu120 checkpoint')
     parser.add_argument('--out_dir', type=str, default='outputs/gym_finetune')
     parser.add_argument('--epochs_head', type=int, default=2)
     parser.add_argument('--epochs_full', type=int, default=10)
