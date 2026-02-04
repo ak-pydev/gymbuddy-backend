@@ -130,16 +130,69 @@ def train_finetune(args):
     # Gym classes? Let's say user provides it or we scan. 
     # If we don't know, we'll scan the dataset labels.
     
-    all_labels = []
-    # Quick scan if not provided
-    if args.num_classes is None:
-        print("Scanning dataset for number of classes...")
-        # handling Subset vs Dataset
-        ds_to_scan = train_ds.dataset if isinstance(train_ds, torch.utils.data.Subset) else train_ds
+    # If we don't know, we'll scan the dataset labels.
+    
+    unique_labels = set()
+    print("Scanning dataset for classes...")
+    # handling Subset vs Dataset
+    ds_to_scan = train_ds.dataset if isinstance(train_ds, torch.utils.data.Subset) else train_ds
+    
+    # We need to scan ALL labels to be safe, or just the ones in this split + val split? 
+    # Safer to scan all if possible, or build mapping dynamically.
+    # For now, let's scan the training set samples at least.
+    
+    # If ds_to_scan has 'samples' attribute (List of dicts)
+    if hasattr(ds_to_scan, 'samples'):
         for s in ds_to_scan.samples:
-            all_labels.append(int(s.get('label', 0)))
-        args.num_classes = max(all_labels) + 1
-        print(f"Found {args.num_classes} classes.")
+            unique_labels.add(int(s.get('label', 0)))
+    else:
+        # Fallback if samples not accessible directly, look at __getitem__ (slow)
+        pass
+
+    sorted_labels = sorted(list(unique_labels))
+    num_unique = len(sorted_labels)
+    min_label = sorted_labels[0] if num_unique > 0 else 0
+    max_label = sorted_labels[-1] if num_unique > 0 else 0
+    
+    print(f"Found {num_unique} unique classes. Range: [{min_label}, {max_label}]")
+    
+    # Check if remapping is needed (if max_label >= num_unique or min_label < 0)
+    # Actually, we should ALWAYS remap to be safe 0..N-1
+    
+    label_map = {old: new for new, old in enumerate(sorted_labels)}
+    
+    if args.num_classes is None:
+        args.num_classes = num_unique
+        print(f"Auto-detected num_classes = {args.num_classes}")
+    
+    # We need to wrap the dataset to apply remapping on the fly
+    class RemappedDataset(torch.utils.data.Dataset):
+        def __init__(self, original_dataset, mapping):
+            self.dataset = original_dataset
+            self.mapping = mapping
+        def __len__(self):
+            return len(self.dataset)
+        def __getitem__(self, idx):
+            item = self.dataset[idx]
+            original_y = item['y']
+            # Map y
+            # If original_y not in map (e.g. validation set has label not in train? risky)
+            # We assume sorted_labels came from FULL dataset scan above.
+            if original_y in self.mapping:
+                item['y'] = self.mapping[original_y]
+            else:
+                 # fallback/error? default to 0
+                 # print(f"Warning: Label {original_y} not in map.")
+                 item['y'] = 0 
+            return item
+            
+    # Apply wrapper
+    train_ds = RemappedDataset(train_ds, label_map)
+    val_ds = RemappedDataset(val_ds, label_map)
+    
+    # Re-create loaders
+    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True)
+    val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False)
         
     model = baseline_model
     in_features = model.fc.in_features
