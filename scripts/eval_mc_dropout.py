@@ -45,40 +45,60 @@ def compute_ece(probs, labels, n_bins=10):
             
     return ece, (accs, confs, counts)
 
-def eval_mc(debug=False, out_file=None):
+
+from gymbuddy.data.loaders.gym_dataset import GymDataset
+
+def eval_mc(debug=False, out_file=None, dataset_name='ntu', data_path=None, checkpoint=None, num_classes=120):
     device = 'mps' if torch.backends.mps.is_available() else 'cpu'
     
-    # Path to baseline checkpoint
-    checkpoint_path = "/anvil/scratch/x-akhanal3/ai-gym-buddy/outputs/ntu120_xsub_baseline/best.pt"
+    # Path to checkpoint
+    if checkpoint is None:
+        checkpoint_path = "/anvil/scratch/x-akhanal3/ai-gym-buddy/outputs/ntu120_xsub_baseline/best.pt" # Default fallback
+    else:
+        checkpoint_path = checkpoint
+
     # Output path for uncertainty stats
-    
     if out_file is None:
-        output_dir = "/anvil/scratch/x-akhanal3/ai-gym-buddy/outputs/uncertainty"
+        output_dir = "outputs/uncertainty"
         os.makedirs(output_dir, exist_ok=True)
-        output_file = os.path.join(output_dir, "ntu120_xsub_mc.npz")
+        filename = f"{dataset_name}_mc.npz"
+        output_file = os.path.join(output_dir, filename)
     else:
         output_file = out_file
         os.makedirs(os.path.dirname(output_file), exist_ok=True)
     
     if not os.path.exists(checkpoint_path):
-        print(f"Checkpoint not found at {checkpoint_path}. Run training first.")
-        # Try fallback
-        old_path = "outputs/ntu120_xsub_baseline/checkpoint.pt"
-        if os.path.exists(old_path):
-             print(f"Found checkpoint at old path name {old_path}, utilizing.")
-             checkpoint_path = old_path
-        else:
-             return
+        print(f"Checkpoint not found at {checkpoint_path}.")
+        return
 
-    # ... (rest of loading logic same) ...
     # Load Model (Ensure d_model match)
-    model = SkeletonTransformer(num_classes=120, d_model=256, nhead=4, num_layers=4, dropout=0.5)
-    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+    print(f"Loading model with num_classes={num_classes} from {checkpoint_path}...")
+    model = SkeletonTransformer(num_classes=num_classes, d_model=256, nhead=4, num_layers=4, dropout=0.5)
+    
+    try:
+        if device == 'cpu':
+             ckpt = torch.load(checkpoint_path, map_location='cpu')
+        else:
+             ckpt = torch.load(checkpoint_path)
+             
+        if 'model_state_dict' in ckpt:
+            model.load_state_dict(ckpt['model_state_dict'])
+        else:
+            model.load_state_dict(ckpt)
+    except Exception as e:
+        print(f"Error loading checkpoint: {e}")
+        return
+
     model.to(device)
     
     # Dataset (Val)
-    print("Initializing Validation Dataset...")
-    val_ds = NTU120Dataset(split='xsub_val', target_frames=60)
+    print(f"Initializing Validation Dataset ({dataset_name})...")
+    if dataset_name == 'ntu':
+        val_ds = NTU120Dataset(data_path=data_path, split='xsub_val', target_frames=60)
+    elif dataset_name == 'gym':
+        val_ds = GymDataset(data_path=data_path, split='val', target_frames=60)
+    else:
+        raise ValueError(f"Unknown dataset: {dataset_name}")
     
     if debug:
         print("DEBUG MODE: Using subset of 50 samples")
@@ -102,10 +122,29 @@ def eval_mc(debug=False, out_file=None):
              y_pred=y_pred)
     print("Inference Complete.")
 
-if __name__ == "__main__":
+
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--debug', action='store_true', help='Run on a small subset')
     parser.add_argument('--out_file', type=str, default=None, help='Path to save output .npz file')
+    parser.add_argument('--dataset', type=str, default='ntu', choices=['ntu', 'gym'], help='Dataset to use')
+    parser.add_argument('--data_path', type=str, default=None, help='Path to dataset pkl')
+    parser.add_argument('--checkpoint', type=str, default=None, help='Path to model checkpoint')
+    parser.add_argument('--num_classes', type=int, default=None, help='Number of classes (default 120 for NTU)')
     args = parser.parse_args()
-    eval_mc(debug=args.debug, out_file=args.out_file)
+    
+    # Defaults
+    if args.dataset == 'ntu':
+        if args.num_classes is None: args.num_classes = 120
+    elif args.dataset == 'gym':
+        if args.num_classes is None: 
+            # Ideally detection or user input. Warning if not set?
+            # Let's assume user provides it or we guess from checkpoint? 
+            # Or we can scan dataset label max.
+            # For now default to 120 if not set, but print warning.
+            print("Warning: num_classes not specified for gym, default 120. Use --num_classes if different.")
+            args.num_classes = 120
+            
+    eval_mc(debug=args.debug, out_file=args.out_file, dataset_name=args.dataset, 
+            data_path=args.data_path, checkpoint=args.checkpoint, num_classes=args.num_classes)
+
