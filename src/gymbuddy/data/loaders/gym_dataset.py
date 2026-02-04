@@ -19,8 +19,8 @@ class GymDataset(Dataset):
                 DATA_ROOT = Path(os.environ["DATA_ROOT"])
                 data_path = DATA_ROOT / "gym" / "gym_2d.pkl"
             else:
-                # Fallback or raise error? For now assume user might pass it.
-                raise ValueError("data_path not provided and DATA_ROOT env var not set")
+                 # Default Anvil path
+                 data_path = Path("/anvil/scratch/x-akhanal3/ai-gym-buddy/data/raw/skeleton/gym/gym_2d.pkl")
         else:
             data_path = Path(data_path)
 
