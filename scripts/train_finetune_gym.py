@@ -206,5 +206,12 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--num_classes', type=int, default=None, help='Overrides auto-detection if provided')
     
+    parser.add_argument('--epochs', type=int, default=None, help='Alias for --epochs_full')
+    
     args = parser.parse_args()
+    
+    # Handle alias
+    if args.epochs is not None:
+        args.epochs_full = args.epochs
+        
     train_finetune(args)
