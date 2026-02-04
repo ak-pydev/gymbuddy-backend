@@ -107,6 +107,15 @@ class GymDataset(Dataset):
             
             # Update C
             T, J, C = s_data.shape
+
+        # 0.5. Joint Padding (e.g. 17 -> 25)
+        # NTU model expects 25 joints. If we have 17 (COCO), we pad.
+        if J < 25:
+            diff = 25 - J
+            # (T, J, C) -> (T, J+diff, C)
+            padding = np.zeros((T, diff, C), dtype=s_data.dtype)
+            s_data = np.concatenate([s_data, padding], axis=1)
+            T, J, C = s_data.shape
         
         # 1. Temporal Sampling / Padding
         s_data = self._resample(s_data, self.target_frames)
@@ -145,21 +154,51 @@ class GymDataset(Dataset):
         Center at pelvis and scale by torso length.
         data: (T, J, C)
         """
-        # Joint 0: SpineBase (Pelvis)
-        # Joint 20: SpineShoulder
+        T, J, C = data.shape
         
-        # 1. Center at pelvis (frame-wise)
-        pelvis = data[:, 0:1, :]
-        data = data - pelvis
-        
-        # 2. Scale by torso length
-        spine_base = data[:, 0, :]   
-        spine_shoulder = data[:, 20, :] 
-        
-        dist = np.linalg.norm(spine_shoulder - spine_base, axis=1) 
-        mean_dist = np.mean(dist)
-        
-        if mean_dist > 1e-6:
-            data = data / mean_dist
+        # Determine format based on J
+        if J == 17:
+            # COCO Format
+            # 5: L Shoulder, 6: R Shoulder
+            # 11: L Hip, 12: R Hip
+            # Pelvis = Midpoint(11, 12)
+            # Torso = Midpoint(5, 6)
+            
+            l_hip = data[:, 11, :]
+            r_hip = data[:, 12, :]
+            pelvis = (l_hip + r_hip) / 2.0 # (T, C)
+            pelvis = pelvis.reshape(T, 1, C)
+            
+            data = data - pelvis
+            
+            l_shoulder = data[:, 5, :]
+            r_shoulder = data[:, 6, :]
+            torso_center = (l_shoulder + r_shoulder) / 2.0
+            
+            # Spine base (0 after centering) to torso center
+            spine_base = np.zeros((T, C)) # It is at 0,0,0
+            
+            dist = np.linalg.norm(torso_center - spine_base, axis=1)
+            mean_dist = np.mean(dist)
+            
+            if mean_dist > 1e-6:
+                data = data / mean_dist
+                
+        else:
+            # Assume NTU / Kinect 25
+            # Joint 0: SpineBase (Pelvis)
+            # Joint 20: SpineShoulder
+            
+            pelvis = data[:, 0:1, :]
+            data = data - pelvis
+            
+            spine_base = data[:, 0, :]   
+            spine_shoulder = data[:, 20, :] 
+            
+            dist = np.linalg.norm(spine_shoulder - spine_base, axis=1) 
+            mean_dist = np.mean(dist)
+            
+            if mean_dist > 1e-6:
+                data = data / mean_dist
         
         return data
