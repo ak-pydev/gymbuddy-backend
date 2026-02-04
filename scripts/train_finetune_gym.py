@@ -207,11 +207,14 @@ if __name__ == "__main__":
     parser.add_argument('--num_classes', type=int, default=None, help='Overrides auto-detection if provided')
     
     parser.add_argument('--epochs', type=int, default=None, help='Alias for --epochs_full')
+    parser.add_argument('--lr', type=float, default=None, help='Alias for --lr_full')
     
     args = parser.parse_args()
     
-    # Handle alias
+    # Handle aliases
     if args.epochs is not None:
         args.epochs_full = args.epochs
+    if args.lr is not None:
+        args.lr_full = args.lr
         
     train_finetune(args)

@@ -17,7 +17,7 @@ class GymDataset(Dataset):
         if data_path is None:
             if "DATA_ROOT" in os.environ:
                 DATA_ROOT = Path(os.environ["DATA_ROOT"])
-                data_path = DATA_ROOT / "gym" / "gym_3d.pkl"
+                data_path = DATA_ROOT / "gym" / "gym_2d.pkl"
             else:
                 # Fallback or raise error? For now assume user might pass it.
                 raise ValueError("data_path not provided and DATA_ROOT env var not set")
