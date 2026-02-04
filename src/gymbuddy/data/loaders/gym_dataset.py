@@ -102,27 +102,31 @@ class GymDataset(Dataset):
                 padding = np.zeros((T, J, diff), dtype=s_data.dtype)
                 s_data = np.concatenate([s_data, padding], axis=-1)
             elif C > self.target_channels:
-                # Crop? Or assume first N are correct.
                 s_data = s_data[:, :, :self.target_channels]
             
             # Update C
-            T, J, C = s_data.shape
-
-        # 0.5. Joint Padding (e.g. 17 -> 25)
-        # NTU model expects 25 joints. If we have 17 (COCO), we pad.
-        if J < 25:
-            diff = 25 - J
-            # (T, J, C) -> (T, J+diff, C)
-            padding = np.zeros((T, diff, C), dtype=s_data.dtype)
-            s_data = np.concatenate([s_data, padding], axis=1)
             T, J, C = s_data.shape
         
         # 1. Temporal Sampling / Padding
         s_data = self._resample(s_data, self.target_frames)
         
-        # 2. Normalization
+        # 2. Normalization (Adaptive)
         s_data = self._normalize(s_data)
         
+        # 3. Joint Mapping (COCO -> NTU)
+        # NTU model expects 25 joints with specific order.
+        # COCO has 17. We must map them.
+        T, J, C = s_data.shape
+        if J == 17:
+             s_data = self._map_coco_to_ntu(s_data)
+             J = 25 # Now it is 25
+        
+        # 4. Joint Padding (fallback if not 17 but still < 25, though likely already handled)
+        if J < 25:
+             diff = 25 - J
+             padding = np.zeros((T, diff, C), dtype=s_data.dtype)
+             s_data = np.concatenate([s_data, padding], axis=1)
+
         # Convert to Tensor
         x = torch.from_numpy(s_data).float()
         
@@ -130,13 +134,115 @@ class GymDataset(Dataset):
         y = int(sample.get('label', -1))
         
         # Mask (all ones since we resample)
-        mask = torch.ones((self.target_frames, J), dtype=torch.bool)
+        mask = torch.ones((self.target_frames, 25), dtype=torch.bool)
         
         return {
             "x": x,
             "y": y,
             "mask": mask
         }
+
+    def _map_coco_to_ntu(self, data):
+        """
+        Maps 17-joint COCO data to 25-joint NTU format.
+        data: (T, 17, C)
+        Returns: (T, 25, C)
+        """
+        T, J, C = data.shape
+        ntu_data = np.zeros((T, 25, C), dtype=data.dtype)
+        
+        # Mapping COCO (Source) -> NTU (Dest)
+        # Based on standard topology approximations
+        
+        # COCO Format:
+        # 0: Nose, 1: LEye, 2: REye, 3: LEar, 4: REar
+        # 5: LShoulder, 6: RShoulder, 7: LElbow, 8: RElbow, 9: LWrist, 10: RWrist
+        # 11: LHip, 12: RHip, 13: LKnee, 14: RKnee, 15: LAnkle, 16: RAnkle
+        
+        # NTU (Kinect V2) Format:
+        # 0: SpineBase (Pelvis) -> Midpoint of Hips (11, 12)
+        # 1: SpineMid -> Midpoint of (Mid-Hips, Mid-Shoulders)
+        # 20: SpineShoulder -> Midpoint of Shoulders (5, 6)
+        # 2: Neck -> Midpoint(Shoulders) + slight offset? Or just same as SpineShoulder for now
+        # 3: Head -> Nose (0)
+        
+        # Arms
+        # 4: LShoulder -> 5
+        # 5: LElbow -> 7
+        # 6: LWrist -> 9
+        # 7: LHand -> (Copy Wrist)
+        # 8: RShoulder -> 6
+        # 9: RElbow -> 8
+        # 10: RWrist -> 10
+        # 11: RHand -> (Copy Wrist)
+        
+        # Legs
+        # 12: LHip -> 11
+        # 13: LKnee -> 13
+        # 14: LAnkle -> 15
+        # 15: LFoot -> (Copy Ankle)
+        # 16: RHip -> 12
+        # 17: RKnee -> 14
+        # 18: RAnkle -> 16
+        # 19: RFoot -> (Copy Ankle)
+        
+        # Calculated joints
+        l_hip = data[:, 11, :]
+        r_hip = data[:, 12, :]
+        mid_hip = (l_hip + r_hip) / 2.0
+        
+        l_sh = data[:, 5, :]
+        r_sh = data[:, 6, :]
+        mid_sh = (l_sh + r_sh) / 2.0
+        
+        # 0: SpineBase
+        ntu_data[:, 0, :] = mid_hip
+        
+        # 1: SpineMid (approx)
+        ntu_data[:, 1, :] = (mid_hip + mid_sh) / 2.0
+        
+        # 20: SpineShoulder
+        ntu_data[:, 20, :] = mid_sh
+        
+        # 2: Neck (approx same as SpineShoulder for lack of better info)
+        ntu_data[:, 2, :] = mid_sh
+        
+        # 3: Head (Nose)
+        ntu_data[:, 3, :] = data[:, 0, :]
+        
+        # Left Arm
+        ntu_data[:, 4, :] = data[:, 5, :] # LShoulder
+        ntu_data[:, 5, :] = data[:, 7, :] # LElbow
+        ntu_data[:, 6, :] = data[:, 9, :] # LWrist
+        ntu_data[:, 7, :] = data[:, 9, :] # LHand (Copy)
+        
+        # Right Arm
+        ntu_data[:, 8, :] = data[:, 6, :] # RShoulder
+        ntu_data[:, 9, :] = data[:, 8, :] # RElbow
+        ntu_data[:, 10, :] = data[:, 10, :] # RWrist
+        ntu_data[:, 11, :] = data[:, 10, :] # RHand (Copy)
+        
+        # Left Leg
+        ntu_data[:, 12, :] = data[:, 11, :] # LHip
+        ntu_data[:, 13, :] = data[:, 13, :] # LKnee
+        ntu_data[:, 14, :] = data[:, 15, :] # LAnkle
+        ntu_data[:, 15, :] = data[:, 15, :] # LFoot (Copy)
+        
+        # Right Leg
+        ntu_data[:, 16, :] = data[:, 12, :] # RHip
+        ntu_data[:, 17, :] = data[:, 14, :] # RKnee
+        ntu_data[:, 18, :] = data[:, 16, :] # RAnkle
+        ntu_data[:, 19, :] = data[:, 16, :] # RFoot (Copy)
+        
+        # 21, 22: HandTips (Copy Wrists)
+        ntu_data[:, 21, :] = data[:, 9, :]
+        ntu_data[:, 23, :] = data[:, 10, :]
+        
+        # 22, 24: Thumbs (Copy Wrists)
+        ntu_data[:, 22, :] = data[:, 9, :]
+        ntu_data[:, 24, :] = data[:, 10, :]
+        
+        return ntu_data
 
     def _resample(self, data, target_len):
         T, J, C = data.shape
