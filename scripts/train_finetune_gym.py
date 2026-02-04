@@ -67,87 +67,30 @@ def train_finetune(args):
         device = torch.device('cuda')
     print(f"Using device: {device}")
     
-    # 1. Dataset
-    # We might not have 'train'/'val' splits in the pkl yet, so we'll do random split if needed.
-    # If the user prepared the pkl with splits, we use them.
-    # For now, let's load 'all' and split 80/20 if explicit splits fail or are same.
+    # 1. Load FULL Dataset first to scan labels globally
+    print(f"Loading full dataset from {args.data_path or 'default'}...")
+    full_ds = GymDataset(data_path=args.data_path, split=None)
     
-    try:
-        train_ds = GymDataset(data_path=args.data_path, split='train')
-        val_ds = GymDataset(data_path=args.data_path, split='val')
-        if len(train_ds) == len(val_ds) and len(train_ds) > 0:
-             # Suspicious duplication or fallback. Let's explicitly random split if they seem identical
-             # But if dataset logic worked, they should be different. 
-             # Let's assume they are correct.
-             pass
-    except Exception as e:
-        print(f"Could not load splits directly ({e}). Loading all and splitting 80/20.")
-        full_ds = GymDataset(data_path=args.data_path, split=None)
-        train_size = int(0.8 * len(full_ds))
-        val_size = len(full_ds) - train_size
-        train_ds, val_ds = random_split(full_ds, [train_size, val_size])
-
-    print(f"Train size: {len(train_ds)}, Val size: {len(val_ds)}")
-    
-    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True)
-    val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False)
-    
-    # 2. Model
-    # Determine num_classes from dataset? Or arg?
-    # Gym dataset likely has different classes than NTU (120).
-    # We need to reshape the head.
-    
-    # Check number of classes in dataset if possible
-    # We can peek at one batch or assume args.num_classes
-    # Let's peek
-    if hasattr(train_ds, 'dataset'): # it's a Subset
-         sample_y = train_ds.dataset.samples[0].get('label', 0)
-         # This assumes labels are 0..N-1. We need max label.
-         # This is risky. Better to argument or max scan.
-         # Let's scan quickly if small, or defaults.
-         pass
-    
-    # Initialize Model with PRETRAINED weights (NTU config)
-    # NTU usually 120 classes.
-    print(f"Loading checkpoint from {args.checkpoint}...")
-    baseline_model = SkeletonTransformer(num_classes=120, d_model=256, nhead=4, num_layers=4, dropout=0.5)
-    
-    try:
-        checkpoint = torch.load(args.checkpoint, map_location=device)
-        # If checkpoint is full state dict
-        if 'model_state_dict' in checkpoint:
-            state_dict = checkpoint['model_state_dict']
-        else:
-            state_dict = checkpoint
-            
-        baseline_model.load_state_dict(state_dict)
-        print("Checkpoint loaded successfully.")
-    except Exception as e:
-        print(f"Error loading checkpoint: {e}")
-        return
-
-    # Replace Head for Gym
-    # Gym classes? Let's say user provides it or we scan. 
-    # If we don't know, we'll scan the dataset labels.
-    
-    # If we don't know, we'll scan the dataset labels.
-    
+    # 2. Scan classes from FULL dataset
     unique_labels = set()
-    print("Scanning dataset for classes...")
-    # handling Subset vs Dataset
-    ds_to_scan = train_ds.dataset if isinstance(train_ds, torch.utils.data.Subset) else train_ds
+    print("Scanning full dataset for classes...")
     
-    # We need to scan ALL labels to be safe, or just the ones in this split + val split? 
-    # Safer to scan all if possible, or build mapping dynamically.
-    # For now, let's scan the training set samples at least.
-    
-    # If ds_to_scan has 'samples' attribute (List of dicts)
-    if hasattr(ds_to_scan, 'samples'):
-        for s in ds_to_scan.samples:
-            unique_labels.add(int(s.get('label', 0)))
+    # If full_ds has 'samples' attribute (List of dicts)
+    if hasattr(full_ds, 'samples'):
+        for s in full_ds.samples:
+            # Handle potential Tensor vs int
+            lbl = s.get('label', 0)
+            if isinstance(lbl, torch.Tensor):
+                lbl = lbl.item()
+            unique_labels.add(int(lbl))
     else:
-        # Fallback if samples not accessible directly, look at __getitem__ (slow)
-        pass
+        # Fallback 
+        for i in range(len(full_ds)):
+             item = full_ds[i] 
+             lbl = item['y']
+             if isinstance(lbl, torch.Tensor):
+                lbl = lbl.item()
+             unique_labels.add(int(lbl))
 
     sorted_labels = sorted(list(unique_labels))
     num_unique = len(sorted_labels)
@@ -155,20 +98,20 @@ def train_finetune(args):
     max_label = sorted_labels[-1] if num_unique > 0 else 0
     
     print(f"Found {num_unique} unique classes. Range: [{min_label}, {max_label}]")
-    
-    # Check if remapping is needed (if max_label >= num_unique or min_label < 0)
-    # Actually, we should ALWAYS remap to be safe 0..N-1
-    
+    print(f"Original Labels: {sorted_labels}")
+
+    # 3. Create Mapping
     label_map = {old: new for new, old in enumerate(sorted_labels)}
     
+    # Override num_classes logic
     if args.num_classes is not None and args.num_classes != num_unique:
         print(f"Warning: User provided --num_classes={args.num_classes} but found {num_unique} unique classes in dataset.")
         print(f"Overriding --num_classes to {num_unique} to match dataset remapping.")
         
     args.num_classes = num_unique
-    print(f"Training with {args.num_classes} classes.")
+    print(f"Training with {args.num_classes} classes (remapped 0..{args.num_classes-1}).")
     
-    # We need to wrap the dataset to apply remapping on the fly
+    # 4. Wrap Dataset
     class RemappedDataset(torch.utils.data.Dataset):
         def __init__(self, original_dataset, mapping):
             self.dataset = original_dataset
@@ -178,26 +121,41 @@ def train_finetune(args):
         def __getitem__(self, idx):
             item = self.dataset[idx]
             original_y = item['y']
-            # Map y
-            # If original_y not in map (e.g. validation set has label not in train? risky)
-            # We assume sorted_labels came from FULL dataset scan above.
-            if original_y in self.mapping:
-                item['y'] = self.mapping[original_y]
-            else:
-                 # fallback/error? default to 0
-                 # print(f"Warning: Label {original_y} not in map.")
-                 item['y'] = 0 
-            return item
             
-    # Apply wrapper
-    train_ds = RemappedDataset(train_ds, label_map)
-    val_ds = RemappedDataset(val_ds, label_map)
+            # Robust conversion
+            if isinstance(original_y, torch.Tensor):
+                original_y = original_y.item()
+            original_y = int(original_y)
+            
+            if original_y in self.mapping:
+                new_y = self.mapping[original_y]
+            else:
+                 # Should not happen if we scanned full dataset
+                 new_y = 0 
+            
+            # Return as Long Tensor
+            item['y'] = torch.tensor(new_y, dtype=torch.long)
+            return item
+
+    # Apply wrapper to FULL dataset
+    full_ds_remapped = RemappedDataset(full_ds, label_map)
     
-    # Re-create loaders
+    # 5. Split Train/Val
+    # Check if original had split info?
+    # For now, we just do random split on the remapped full dataset
+    train_size = int(0.8 * len(full_ds_remapped))
+    val_size = len(full_ds_remapped) - train_size
+    train_ds, val_ds = random_split(full_ds_remapped, [train_size, val_size])
+    
+    print(f"Train size: {len(train_ds)}, Val size: {len(val_ds)}")
+    
+    # Print stats of remapped
+    # (Optional: could scan train_ds to show class distribution)
+    
     train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False)
         
-    model = baseline_model
+    model = baseline_model = SkeletonTransformer(num_classes=120, d_model=256, nhead=4, num_layers=4, dropout=args.dropout)
     in_features = model.fc.in_features
     model.fc = nn.Linear(in_features, args.num_classes)
     model.to(device)
@@ -261,6 +219,7 @@ if __name__ == "__main__":
     parser.add_argument('--lr_full', type=float, default=1e-4)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--num_classes', type=int, default=None, help='Overrides auto-detection if provided')
+    parser.add_argument('--dropout', type=float, default=0.5, help='Dropout probability')
     
     parser.add_argument('--epochs', type=int, default=None, help='Alias for --epochs_full')
     parser.add_argument('--lr', type=float, default=None, help='Alias for --lr_full')
