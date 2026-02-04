@@ -161,9 +161,12 @@ def train_finetune(args):
     
     label_map = {old: new for new, old in enumerate(sorted_labels)}
     
-    if args.num_classes is None:
-        args.num_classes = num_unique
-        print(f"Auto-detected num_classes = {args.num_classes}")
+    if args.num_classes is not None and args.num_classes != num_unique:
+        print(f"Warning: User provided --num_classes={args.num_classes} but found {num_unique} unique classes in dataset.")
+        print(f"Overriding --num_classes to {num_unique} to match dataset remapping.")
+        
+    args.num_classes = num_unique
+    print(f"Training with {args.num_classes} classes.")
     
     # We need to wrap the dataset to apply remapping on the fly
     class RemappedDataset(torch.utils.data.Dataset):
