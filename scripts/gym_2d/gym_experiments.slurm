@@ -60,6 +60,8 @@ echo "Gating sweep: NTU baseline (for comparison)"
 echo "=============================================="
 $PY scripts/run_gating_sweep.py \
   --mc_file "$OUTPUT_DIR/uncertainty/ntu120_xsub_mc.npz" \
+  --out_csv "$OUTPUT_DIR/uncertainty/ntu_gating/gating.csv" \
+  --out_fig "$OUTPUT_DIR/uncertainty/ntu_gating/risk_coverage.png" \
   --out_dir "$OUTPUT_DIR/uncertainty/ntu_gating" \
   --dataset_name ntu_baseline
 
