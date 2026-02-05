@@ -114,17 +114,27 @@ def load_gym_data(data_path, target_frames=60, normalize=True, center_joint=0):
     else:
         raise ValueError(f"Unknown data format: {type(data)}")
     
-    skeletons = np.array(skeletons)
+    # Keep as list for now (variable length sequences)
     labels = np.array(labels)
     
     print(f"  Loaded {len(skeletons)} samples")
-    print(f"  Original skeleton shape: {skeletons.shape}")
+    print(f"  First skeleton shape: {np.array(skeletons[0]).shape}")
     print(f"  Labels shape: {labels.shape}")
     print(f"  Unique classes: {len(np.unique(labels))}")
     
-    # Process each skeleton
+    # Process each skeleton individually (handles variable length)
     processed_skeletons = []
     for i, skel in enumerate(skeletons):
+        skel = np.array(skel)
+        
+        # Handle extra dimension if present (e.g., shape (1, T, J, C) -> (T, J, C))
+        while skel.ndim > 3:
+            skel = skel.squeeze(0)
+        
+        # If shape is (T, J, C), proceed; if (M, T, J, C) for M persons, take first
+        if skel.ndim == 4:
+            skel = skel[0]  # Take first person
+        
         # Interpolate to target frames
         if skel.shape[0] != target_frames:
             skel = interpolate_frames(skel, target_frames)

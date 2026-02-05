@@ -92,14 +92,24 @@ def load_gym_data(data_path, target_frames=60, normalize=True, center_joint=0):
     else:
         raise ValueError(f"Unknown format: {type(data)}")
     
-    skeletons = np.array(skeletons)
+    # Keep as list for now (variable length sequences)
     labels = np.array(labels)
     
-    print(f"  Original: {len(skeletons)} samples, shape {skeletons.shape}")
+    print(f"  Original: {len(skeletons)} samples, first shape: {np.array(skeletons[0]).shape}")
     
-    # Preprocess
+    # Preprocess each skeleton individually
     processed = []
     for skel in skeletons:
+        skel = np.array(skel)
+        
+        # Handle extra dimension if present
+        while skel.ndim > 3:
+            skel = skel.squeeze(0)
+        
+        # If shape is (M, T, J, C) for M persons, take first
+        if skel.ndim == 4:
+            skel = skel[0]
+        
         if skel.shape[0] != target_frames:
             skel = interpolate_frames(skel, target_frames)
         if normalize:
