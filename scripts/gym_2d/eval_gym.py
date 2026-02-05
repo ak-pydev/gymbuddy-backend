@@ -11,7 +11,7 @@ import os
 import argparse
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, Dataset
 import pickle
 from scipy import interpolate
 
@@ -153,6 +153,19 @@ def load_gym_data(data_path, target_frames=60, normalize=True, center_joint=0):
     return skeletons, labels
 
 
+class DictDataset(Dataset):
+    """Dataset that returns batches as dicts with 'x' and 'y' keys for predict_mc."""
+    def __init__(self, X, y):
+        self.X = torch.tensor(X, dtype=torch.float32)
+        self.y = torch.tensor(y, dtype=torch.long)
+    
+    def __len__(self):
+        return len(self.y)
+    
+    def __getitem__(self, idx):
+        return {'x': self.X[idx], 'y': self.y[idx]}
+
+
 def eval_gym():
     parser = argparse.ArgumentParser(description='Evaluate on gym_2d data')
     parser.add_argument('--gym_data', type=str, required=True, help='Path to gym_2d.pkl')
@@ -206,10 +219,9 @@ def eval_gym():
         skeletons = skeletons[indices]
         labels = labels[indices]
     
-    # Create dataloader
-    X_tensor = torch.tensor(skeletons, dtype=torch.float32)
-    y_tensor = torch.tensor(labels, dtype=torch.long)
-    dataset = TensorDataset(X_tensor, y_tensor)
+    
+    # Create dataloader (using DictDataset for predict_mc compatibility)
+    dataset = DictDataset(skeletons, labels)
     loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False)
     
     # Run MC dropout
