@@ -84,7 +84,7 @@ def run_ablation():
     
     # Load model
     print(f"Loading model from {args.checkpoint}...")
-    model = SkeletonTransformer(num_classes=args.num_classes, d_model=256, nhead=4, num_layers=4, dropout=0.5)
+    model = SkeletonTransformer(num_classes=args.num_classes, d_model=256, nhead=4, num_layers=4, dropout=0.1)
     
     ckpt = torch.load(args.checkpoint, map_location=device)
     if 'model_state_dict' in ckpt:
