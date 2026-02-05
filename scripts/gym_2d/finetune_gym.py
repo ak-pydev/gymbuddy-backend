@@ -20,6 +20,7 @@ import pickle
 import json
 from scipy import interpolate
 from tqdm import tqdm
+import time
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../src'))
@@ -155,19 +156,23 @@ def freeze_backbone(model):
     print(f"  Trainable params: {trainable:,} / {total:,} ({100*trainable/total:.1f}%)")
 
 
-def train_epoch(model, loader, criterion, optimizer, device):
+def train_epoch(model, loader, criterion, optimizer, device, max_grad_norm=1.0):
     model.train()
     total_loss = 0
     correct = 0
     total = 0
     
-    for X, y in loader:
+    for X, y in tqdm(loader, desc='Train', leave=False):
         X, y = X.to(device), y.to(device)
         
         optimizer.zero_grad()
         outputs = model(X)
         loss = criterion(outputs, y)
         loss.backward()
+        
+        # Gradient clipping
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+        
         optimizer.step()
         
         total_loss += loss.item() * len(y)
@@ -185,7 +190,7 @@ def eval_epoch(model, loader, criterion, device):
     total = 0
     
     with torch.no_grad():
-        for X, y in loader:
+        for X, y in tqdm(loader, desc='Val', leave=False):
             X, y = X.to(device), y.to(device)
             outputs = model(X)
             loss = criterion(outputs, y)
@@ -212,6 +217,7 @@ def finetune_gym():
     parser.add_argument('--val_split', type=float, default=0.2, help='Validation split')
     parser.add_argument('--target_frames', type=int, default=60, help='Target frames')
     parser.add_argument('--no_normalize', action='store_true', help='Skip normalization')
+    parser.add_argument('--patience', type=int, default=5, help='Early stopping patience')
     args = parser.parse_args()
     
     os.makedirs(args.out_dir, exist_ok=True)
@@ -276,6 +282,7 @@ def finetune_gym():
     print("-" * 60)
     
     best_val_acc = 0
+    epochs_without_improvement = 0
     history = {'train_loss': [], 'train_acc': [], 'val_loss': [], 'val_acc': [], 'lr': []}
     
     for epoch in range(args.epochs):
@@ -290,15 +297,21 @@ def finetune_gym():
         
         print(f"{epoch+1:>6} {train_loss:>12.4f} {train_acc:>10.4f} {val_loss:>12.4f} {val_acc:>10.4f}")
         
-        # Save best
+        # Save best and check early stopping
         if val_acc > best_val_acc:
             best_val_acc = val_acc
+            epochs_without_improvement = 0
             torch.save({
                 'model_state_dict': model.state_dict(),
                 'epoch': epoch,
                 'val_acc': val_acc,
                 'mode': args.mode
             }, os.path.join(args.out_dir, 'best.pt'))
+        else:
+            epochs_without_improvement += 1
+            if epochs_without_improvement >= args.patience:
+                print(f"\nEarly stopping at epoch {epoch+1} (no improvement for {args.patience} epochs)")
+                break
         
         scheduler.step()
     
