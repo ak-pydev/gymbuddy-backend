@@ -3,8 +3,9 @@ import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, random_split, WeightedRandomSampler
 import numpy as np
+from collections import Counter
 import argparse
 from pathlib import Path
 import copy
@@ -184,7 +185,26 @@ def train_finetune(args):
     inspect("train", train_ds)
     inspect("val", val_ds)
 
-    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True)
+    # 6. Compute Class Weights for Imbalance Handling
+    print("Computing class weights for imbalanced dataset...")
+    if isinstance(train_ds, torch.utils.data.Subset):
+        train_labels = [int(train_ds.dataset[i]['y'].item()) for i in train_ds.indices]
+    else:
+        train_labels = [int(train_ds[i]['y'].item()) for i in range(len(train_ds))]
+    
+    class_counts = Counter(train_labels)
+    num_classes_actual = len(class_counts)
+    class_weights = torch.zeros(num_classes_actual)
+    for c, count in class_counts.items():
+        class_weights[c] = 1.0 / count
+    
+    # Sample weights for WeightedRandomSampler
+    sample_weights = [class_weights[label] for label in train_labels]
+    sampler = WeightedRandomSampler(sample_weights, num_samples=len(sample_weights), replacement=True)
+    
+    print(f"Class weights computed. Min freq: {min(class_counts.values())}, Max freq: {max(class_counts.values())}")
+    
+    train_loader = DataLoader(train_ds, batch_size=args.batch_size, sampler=sampler)
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False)
     
     # DEBUG: Overfit tiny subset
@@ -222,7 +242,9 @@ def train_finetune(args):
     model.fc = nn.Linear(in_features, args.num_classes)
     model.to(device)
     
-    criterion = nn.CrossEntropyLoss()
+    # Class-weighted loss as additional safeguard
+    class_weights_loss = class_weights / class_weights.sum() * num_classes_actual  # Normalize
+    criterion = nn.CrossEntropyLoss(weight=class_weights_loss.to(device))
     
     # PHASE 1: Head Only
     print(f"\n=== Phase 1: Training Head Only ({args.epochs_head} epochs) ===")
@@ -233,7 +255,7 @@ def train_finetune(args):
     for param in model.fc.parameters():
         param.requires_grad = True
         
-    optimizer = optim.Adam(model.fc.parameters(), lr=args.lr_head)
+    optimizer = optim.AdamW(model.fc.parameters(), lr=args.lr_head, weight_decay=0.01)
     
     # DEBUG: Check trainable params
     trainable = [(n, p.shape) for n,p in model.named_parameters() if p.requires_grad]
@@ -257,7 +279,16 @@ def train_finetune(args):
     trainable = [(n, p.shape) for n,p in model.named_parameters() if p.requires_grad]
     print(f"DEBUG: Trainable params (Full): {len(trainable)}")
     
-    optimizer = optim.Adam(model.parameters(), lr=args.lr_full)
+    # Discriminative LR: backbone gets lower LR than head
+    backbone_params = [p for n, p in model.named_parameters() if 'fc' not in n and p.requires_grad]
+    head_params = [p for n, p in model.named_parameters() if 'fc' in n and p.requires_grad]
+    
+    optimizer = optim.AdamW([
+        {'params': backbone_params, 'lr': args.lr_backbone},
+        {'params': head_params, 'lr': args.lr_head}
+    ], weight_decay=0.01)
+    
+    print(f"Discriminative LR: Backbone={args.lr_backbone}, Head={args.lr_head}")
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs_full)
     
     best_acc = 0.0
@@ -290,8 +321,9 @@ if __name__ == "__main__":
     parser.add_argument('--out_dir', type=str, default='outputs/gym_finetune')
     parser.add_argument('--epochs_head', type=int, default=2)
     parser.add_argument('--epochs_full', type=int, default=10)
-    parser.add_argument('--lr_head', type=float, default=1e-3)
-    parser.add_argument('--lr_full', type=float, default=1e-4)
+    parser.add_argument('--lr_head', type=float, default=1e-3, help='Learning rate for head (Phase 1 & 2)')
+    parser.add_argument('--lr_backbone', type=float, default=2e-5, help='Learning rate for backbone (Phase 2)')
+    parser.add_argument('--lr_full', type=float, default=1e-4, help='DEPRECATED: Use lr_backbone instead')
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--num_classes', type=int, default=None, help='Overrides auto-detection if provided')
     parser.add_argument('--dropout', type=float, default=0.1, help='Dropout probability')
