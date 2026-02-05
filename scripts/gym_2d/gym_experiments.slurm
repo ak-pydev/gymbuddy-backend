@@ -56,9 +56,9 @@ $PY scripts/gym_2d/eval_gym.py \
   --n_passes 20
 
 echo "=============================================="
-echo "Gating sweep: frozen model"
+echo "Gating sweep: Gym frozen model"
 echo "=============================================="
-$PY scripts/run_gating_sweep.py \
+$PY scripts/gym_2d/run_gating_sweep.py \
   --mc_file "$OUTPUT_DIR/uncertainty/gym_frozen_mc.npz" \
   --out_dir "$OUTPUT_DIR/uncertainty/gym_frozen_gating" \
   --dataset_name gym_frozen
@@ -66,7 +66,7 @@ $PY scripts/run_gating_sweep.py \
 echo "=============================================="
 echo "Gating sweep: fine-tuned model"
 echo "=============================================="
-$PY scripts/run_gating_sweep.py \
+$PY scripts/gym_2d/run_gating_sweep.py \
   --mc_file "$OUTPUT_DIR/uncertainty/gym_finetuned_mc.npz" \
   --out_dir "$OUTPUT_DIR/uncertainty/gym_finetuned_gating" \
   --dataset_name gym_finetuned
