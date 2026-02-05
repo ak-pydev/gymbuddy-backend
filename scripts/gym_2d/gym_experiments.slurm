@@ -35,12 +35,6 @@ $PY scripts/gym_2d/evaluate_mc_dropout.py \
   --out_file "$OUTPUT_DIR/uncertainty/gym_frozen_mc.npz" \
   --n_passes 20
 
-$PY scripts/gym_2d/evaluate_mc_dropout.py \
-  --gym_data "$GYM_DATA" \
-  --checkpoint "$OUTPUT_DIR/ntu120_xsub_baseline/best.pt" \
-  --out_file "$OUTPUT_DIR/uncertainty/gym_frozen_mc.npz" \
-  --n_passes 20
-
 echo "=============================================="
 echo "OPTION B: Fine-tune on gym (head-only)"
 echo "=============================================="

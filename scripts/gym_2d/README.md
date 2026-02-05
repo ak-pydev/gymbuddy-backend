@@ -6,8 +6,8 @@ Scripts for gym_2d domain experiments and NTU comparison.
 
 | Option | Description | Script |
 |--------|-------------|--------|
-| **A** | Zero-shot (frozen NTU model) | `eval_gym.py` |
-| **B** | Fine-tuned (adapt to gym) | `finetune_gym.py` → `eval_gym.py` |
+| **A** | Zero-shot (frozen NTU model) | `evaluate_mc_dropout.py` |
+| **B** | Fine-tuned (adapt to gym) | `finetune_gym.py` → `evaluate_mc_dropout.py` |
 
 Comparing both shows: **what improves with adaptation** vs **what uncertainty still catches**.
 
@@ -24,7 +24,7 @@ Comparing both shows: **what improves with adaptation** vs **what uncertainty st
 
 ```bash
 # Option A: Zero-shot eval
-python scripts/gym_2d/eval_gym.py \
+python scripts/gym_2d/evaluate_mc_dropout.py \
   --gym_data /path/to/gym_2d.pkl \
   --checkpoint outputs/ntu120_xsub_baseline/best.pt \
   --out_file outputs/uncertainty/gym_frozen_mc.npz
@@ -36,7 +36,7 @@ python scripts/gym_2d/finetune_gym.py \
   --out_dir outputs/gym_finetuned \
   --mode head  # or 'full'
 
-python scripts/gym_2d/eval_gym.py \
+python scripts/gym_2d/evaluate_mc_dropout.py \
   --gym_data /path/to/gym_2d.pkl \
   --checkpoint outputs/gym_finetuned/best.pt \
   --out_file outputs/uncertainty/gym_finetuned_mc.npz
@@ -50,7 +50,7 @@ python scripts/gym_2d/compare_domains.py \
 
 ## Anvil (Full Pipeline)
 ```bash
-sbatch scripts/gym_2d/eval_gym.slurm
+sbatch scripts/gym_2d/gym_experiments.slurm
 ```
 
 Runs: Option A → Option B (fine-tune) → Both evals → Both comparisons.
