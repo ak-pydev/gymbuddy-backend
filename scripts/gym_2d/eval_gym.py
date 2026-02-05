@@ -93,14 +93,24 @@ def load_gym_data(data_path, target_frames=60, normalize=True, center_joint=0):
         elif 'x' in data:
             skeletons = data['x']
             labels = data['y']
+        elif 'annotations' in data:
+            # Format: {'split': ..., 'annotations': [{'keypoint': array, 'label': int}, ...]}
+            annotations = data['annotations']
+            print(f"  Found annotations format with {len(annotations)} samples")
+            skeletons = [ann['keypoint'] for ann in annotations]
+            labels = [ann['label'] for ann in annotations]
         else:
             raise ValueError(f"Unknown dict keys: {data.keys()}")
     elif isinstance(data, tuple):
         skeletons, labels = data
     elif isinstance(data, list):
-        # List of (skeleton, label) tuples
-        skeletons = [item[0] for item in data]
-        labels = [item[1] for item in data]
+        # List of (skeleton, label) tuples or list of dicts
+        if isinstance(data[0], dict):
+            skeletons = [item['keypoint'] for item in data]
+            labels = [item['label'] for item in data]
+        else:
+            skeletons = [item[0] for item in data]
+            labels = [item[1] for item in data]
     else:
         raise ValueError(f"Unknown data format: {type(data)}")
     
