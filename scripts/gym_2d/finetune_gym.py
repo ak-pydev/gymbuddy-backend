@@ -59,6 +59,42 @@ def normalize_skeleton(skeleton, center_joint=0):
     return centered
 
 
+def adapt_skeleton_to_ntu(skeleton):
+    """
+    Adapt gym 2D skeleton (17 joints × 2 coords) to NTU format (25 joints × 3 coords).
+    Maps COCO 17-keypoint format to NTU 25-joint format with z=0.
+    """
+    T = skeleton.shape[0]
+    J_in = skeleton.shape[1]
+    C_in = skeleton.shape[2]
+    
+    if J_in == 25 and C_in == 3:
+        return skeleton
+    
+    ntu_skeleton = np.zeros((T, 25, 3), dtype=skeleton.dtype)
+    
+    # Map COCO 17 joints to NTU 25 joints
+    coco_to_ntu = {
+        0: 3, 5: 4, 6: 8, 7: 5, 8: 9, 9: 6, 10: 10,
+        11: 12, 12: 16, 13: 13, 14: 17, 15: 14, 16: 18,
+    }
+    
+    for coco_idx, ntu_idx in coco_to_ntu.items():
+        if coco_idx < J_in:
+            ntu_skeleton[:, ntu_idx, :C_in] = skeleton[:, coco_idx, :C_in]
+    
+    # Create spine center from mid-hip
+    if J_in >= 13:
+        ntu_skeleton[:, 0, :C_in] = (skeleton[:, 11, :C_in] + skeleton[:, 12, :C_in]) / 2
+    
+    # Create spine/neck from mid-shoulder
+    if J_in >= 7:
+        mid_shoulder = (skeleton[:, 5, :C_in] + skeleton[:, 6, :C_in]) / 2
+        ntu_skeleton[:, 1, :C_in] = mid_shoulder
+        ntu_skeleton[:, 2, :C_in] = mid_shoulder
+    
+    return ntu_skeleton
+
 def load_gym_data(data_path, target_frames=60, normalize=True, center_joint=0):
     """Load and preprocess gym data."""
     print(f"Loading gym data from {data_path}...")
@@ -113,6 +149,10 @@ def load_gym_data(data_path, target_frames=60, normalize=True, center_joint=0):
         
         if skel.shape[0] != target_frames:
             skel = interpolate_frames(skel, target_frames)
+        
+        # Adapt gym skeleton to NTU format (17 joints 2D -> 25 joints 3D)
+        skel = adapt_skeleton_to_ntu(skel)
+        
         if normalize:
             skel = normalize_skeleton(skel, center_joint)
         processed.append(skel)

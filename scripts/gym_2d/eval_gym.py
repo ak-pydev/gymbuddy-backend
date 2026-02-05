@@ -52,6 +52,69 @@ def interpolate_frames(skeleton, target_frames):
     return interpolated
 
 
+def adapt_skeleton_to_ntu(skeleton):
+    """
+    Adapt gym 2D skeleton (17 joints × 2 coords) to NTU format (25 joints × 3 coords).
+    
+    Gym 2D uses COCO 17-keypoint format (from pose estimation):
+    0: nose, 1: left_eye, 2: right_eye, 3: left_ear, 4: right_ear,
+    5: left_shoulder, 6: right_shoulder, 7: left_elbow, 8: right_elbow,
+    9: left_wrist, 10: right_wrist, 11: left_hip, 12: right_hip,
+    13: left_knee, 14: right_knee, 15: left_ankle, 16: right_ankle
+    
+    NTU uses 25 joints with 3D coords. We map available joints and set z=0.
+    """
+    T = skeleton.shape[0]
+    J_in = skeleton.shape[1]
+    C_in = skeleton.shape[2]
+    
+    # If already 25 joints and 3D, return as is
+    if J_in == 25 and C_in == 3:
+        return skeleton
+    
+    # Create output skeleton: 25 joints × 3 coords
+    ntu_skeleton = np.zeros((T, 25, 3), dtype=skeleton.dtype)
+    
+    # Map COCO 17 joints to NTU 25 joints (best effort mapping)
+    # NTU joint indices and approximate COCO equivalents:
+    coco_to_ntu = {
+        0: 3,    # Nose -> Head
+        5: 4,    # L Shoulder -> L Shoulder  
+        6: 8,    # R Shoulder -> R Shoulder
+        7: 5,    # L Elbow -> L Elbow
+        8: 9,    # R Elbow -> R Elbow
+        9: 6,    # L Wrist -> L Wrist
+        10: 10,  # R Wrist -> R Wrist
+        11: 12,  # L Hip -> L Hip
+        12: 16,  # R Hip -> R Hip
+        13: 13,  # L Knee -> L Knee
+        14: 17,  # R Knee -> R Knee
+        15: 14,  # L Ankle -> L Ankle
+        16: 18,  # R Ankle -> R Ankle
+    }
+    
+    # Copy mapped joints (x, y), set z=0
+    for coco_idx, ntu_idx in coco_to_ntu.items():
+        if coco_idx < J_in:
+            ntu_skeleton[:, ntu_idx, :C_in] = skeleton[:, coco_idx, :C_in]
+            # z = 0 is already set from zeros initialization
+    
+    # Create spine center (NTU joint 0) from mid-hip
+    if J_in >= 13:  # Has both hips
+        ntu_skeleton[:, 0, :C_in] = (skeleton[:, 11, :C_in] + skeleton[:, 12, :C_in]) / 2
+    
+    # Create spine (NTU joint 1) from mid-shoulder
+    if J_in >= 7:  # Has both shoulders
+        ntu_skeleton[:, 1, :C_in] = (skeleton[:, 5, :C_in] + skeleton[:, 6, :C_in]) / 2
+    
+    # Create neck (NTU joint 2) between spine and head
+    if J_in >= 7:
+        mid_shoulder = (skeleton[:, 5, :C_in] + skeleton[:, 6, :C_in]) / 2
+        ntu_skeleton[:, 2, :C_in] = mid_shoulder
+    
+    return ntu_skeleton
+
+
 def normalize_skeleton(skeleton, center_joint=0):
     """
     Normalize skeleton to be centered at a reference joint (typically hip/spine).
@@ -138,6 +201,9 @@ def load_gym_data(data_path, target_frames=60, normalize=True, center_joint=0):
         # Interpolate to target frames
         if skel.shape[0] != target_frames:
             skel = interpolate_frames(skel, target_frames)
+        
+        # Adapt gym skeleton to NTU format (17 joints 2D -> 25 joints 3D)
+        skel = adapt_skeleton_to_ntu(skel)
         
         # Normalize skeleton
         if normalize:
