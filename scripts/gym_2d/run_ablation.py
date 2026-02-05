@@ -18,7 +18,7 @@ sys.path.append(os.path.join(os.getcwd(), 'src'))
 
 from gymbuddy.data.loaders.ntu120 import NTU120Dataset
 from gymbuddy.models.transformer import SkeletonTransformer
-from gymbuddy.uncertainty.mc_dropout import predict_mc
+from mc_dropout import predict_mc
 
 
 def compute_calibration_metrics(probs, labels, uncertainty, n_bins=10):

@@ -19,7 +19,7 @@ from scipy import interpolate
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../src'))
 
 from gymbuddy.models.transformer import SkeletonTransformer
-from gymbuddy.uncertainty.mc_dropout import predict_mc
+from mc_dropout import predict_mc
 
 
 def interpolate_frames(skeleton, target_frames):
