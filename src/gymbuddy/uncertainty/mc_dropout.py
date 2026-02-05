@@ -20,7 +20,7 @@ def predict_mc(model, data_loader, n_passes=20, device='cpu'):
         
     Returns:
         mean_probs: (N, C) - Mean softmax probabilities.
-        uncertainty: (N,) - Predictive entropy or defined metric (here variance or entropy).
+        uncertainty: (N,) - Mutual Information (Epistemic Uncertainty).
         targets: (N,) - Ground truth labels.
     """
     model.eval()
@@ -55,18 +55,28 @@ def predict_mc(model, data_loader, n_passes=20, device='cpu'):
             # Mean: (B, C)
             mean_probs = batch_probs.mean(dim=0)
             
-            # Uncertainty: Entropy of mean dist? Or Variance?
-            # User asked for "u_epistemic (variance across passes)".
-            # Variance of the probabilities?
-            # Usually: Var[p] = E[p^2] - (E[p])^2
-            # We can sum variance over classes or take max var.
-            # "scalar per sample".
-            # Common metric: Predictive Entropy H(p_mean).
-            # But if user insists on "variance":
-            # Let's compute average variance across classes for each sample.
-            variance = batch_probs.var(dim=0).mean(dim=1) # (B,)
+            # --- Uncertainty Metrics ---
+            # 1. Predictive Entropy (Total Uncertainty): H(mean_probs)
+            # H(p) = -sum(p * log(p))
+            # epsilon for stability
+            epsilon = 1e-10
+            predictive_entropy = -(mean_probs * torch.log(mean_probs + epsilon)).sum(dim=1)
+            
+            # 2. Aleatoric Entropy (Average Entropy of single passes): E[H(probs)]
+            # entropy per pass: (n_passes, B)
+            entropy_per_pass = -(batch_probs * torch.log(batch_probs + epsilon)).sum(dim=2)
+            aleatoric_entropy = entropy_per_pass.mean(dim=0)
+            
+            # 3. Mutual Information (Epistemic Uncertainty)
+            # MI = H(mean_probs) - E[H(probs)]
+            # Represents the information gained about model parameters by seeing the label.
+            # Isolates uncertainty due to model variance ("what the model doesn't know").
+            mutual_info = predictive_entropy - aleatoric_entropy
+            
+            # Ensure non-negative (numerical instability can cause tiny < 0)
+            mutual_info = torch.clamp(mutual_info, min=0.0)
             
             mean_probs_list.append(mean_probs.cpu().numpy())
-            uncertainty_list.append(variance.cpu().numpy())
+            uncertainty_list.append(mutual_info.cpu().numpy())
             
     return np.concatenate(mean_probs_list), np.concatenate(uncertainty_list), np.concatenate(targets_list)
