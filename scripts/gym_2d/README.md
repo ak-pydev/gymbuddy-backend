@@ -15,7 +15,7 @@ Comparing both shows: **what improves with adaptation** vs **what uncertainty st
 
 | Script | Description |
 |--------|-------------|
-| `eval_gym.py` | MC dropout evaluation with proper preprocessing |
+| `evaluate_mc_dropout.py` | MC dropout evaluation with proper preprocessing |
 | `finetune_gym.py` | Head-only or full fine-tuning on gym data |
 | `compare_domains.py` | NTU vs gym comparison (6 plots + safety table) |
 | `gym_experiments.slurm` | Full A+B pipeline for Anvil |

@@ -29,7 +29,7 @@ $PY -c "import torch; print('cuda?', torch.cuda.is_available())"
 echo "=============================================="
 echo "OPTION A: Zero-shot evaluation (frozen NTU model)"
 echo "=============================================="
-$PY scripts/gym_2d/eval_gym.py \
+$PY scripts/gym_2d/evaluate_mc_dropout.py \
   --gym_data "$GYM_DATA" \
   --checkpoint "$OUTPUT_DIR/ntu120_xsub_baseline/best.pt" \
   --out_file "$OUTPUT_DIR/uncertainty/gym_frozen_mc.npz" \
@@ -49,7 +49,7 @@ $PY scripts/gym_2d/finetune_gym.py \
 echo "=============================================="
 echo "Evaluate fine-tuned model"
 echo "=============================================="
-$PY scripts/gym_2d/eval_gym.py \
+$PY scripts/gym_2d/evaluate_mc_dropout.py \
   --gym_data "$GYM_DATA" \
   --checkpoint "$OUTPUT_DIR/gym_finetuned_head/best.pt" \
   --out_file "$OUTPUT_DIR/uncertainty/gym_finetuned_mc.npz" \
