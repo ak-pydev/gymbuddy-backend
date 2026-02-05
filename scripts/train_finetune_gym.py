@@ -8,6 +8,14 @@ import numpy as np
 import argparse
 from pathlib import Path
 import copy
+import random
+
+def set_seed(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 # Add src to path
 sys.path.append(os.path.join(os.getcwd(), 'src'))
@@ -70,6 +78,8 @@ def validate(model, loader, criterion, device):
     return total_loss / total, correct / total
 
 def train_finetune(args):
+    set_seed(42) # Reproducibility
+    
     # Device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
