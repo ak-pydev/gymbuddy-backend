@@ -56,6 +56,14 @@ $PY scripts/gym_2d/eval_gym.py \
   --n_passes 20
 
 echo "=============================================="
+echo "Gating sweep: NTU baseline (for comparison)"
+echo "=============================================="
+$PY scripts/run_gating_sweep.py \
+  --mc_file "$OUTPUT_DIR/uncertainty/ntu120_xsub_mc.npz" \
+  --out_dir "$OUTPUT_DIR/uncertainty/ntu_gating" \
+  --dataset_name ntu_baseline
+
+echo "=============================================="
 echo "Gating sweep: Gym frozen model"
 echo "=============================================="
 $PY scripts/gym_2d/run_gating_sweep.py \
