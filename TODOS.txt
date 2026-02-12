@@ -1,0 +1,26 @@
+# Paper Polish Phase
+
+1. Generate Training Curves (NTU & Gym)
+   - Script: `scripts/gym_2d/plot_training_curves.py`
+   - Goal: Visualize convergence (loss/accuracy) for baseline and finetuning.
+
+2. Measure Inference Latency
+   - Script: `scripts/gym_2d/benchmark_latency.py`
+   - Goal: Plot FPS vs MC passes (1, 5, 10, 20) to justify "cost of safety".
+
+3. Per-Class Performance Analysis
+   - Script: `scripts/gym_2d/analyze_per_class.py`
+   - Goal: Identify top 5 best and worst transferred exercises.
+
+4. Qualitative "Save" vs "Fail" Analysis
+   - Script: `scripts/gym_2d/qualitative_analysis.py`
+   - Goal: Find examples where:
+     - Gating SAVES the model (Prediction Wrong + High Uncertainty)
+     - Model FAILS silently (Prediction Wrong + Low Uncertainty)
+
+5. Ablation Study (Robustness)
+   - Script: `scripts/gym_2d/run_ablation.py`
+   - Goal: Verify robustness to dropout rates and MC passes.
+
+6. Final Paper Assembly
+   - Draft sections based on these new figures.
