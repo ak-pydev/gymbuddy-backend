@@ -52,7 +52,7 @@ fi
 test -f "$NTU_MC_FILE" || die "NTU MC file missing: $NTU_MC_FILE"
 
 # scripts (catch typos early)
-test -f scripts/gym_2d/eval_gym.py || die "Missing: scripts/gym_2d/eval_gym.py"
+test -f scripts/gym_2d/evaluate_mc_dropout.py || die "Missing: scripts/gym_2d/evaluate_mc_dropout.py"
 test -f scripts/gym_2d/finetune_gym.py || die "Missing: scripts/gym_2d/finetune_gym.py"
 test -f scripts/gym_2d/run_gating_sweep.py || die "Missing: scripts/gym_2d/run_gating_sweep.py"
 test -f scripts/gym_2d/compare_domains.py || die "Missing: scripts/gym_2d/compare_domains.py"
@@ -85,7 +85,7 @@ $PY -c "import torch; print('cuda?', torch.cuda.is_available(), '| torch:', torc
 echo "=============================================="
 echo "OPTION A: Zero-shot evaluation (frozen NTU model)"
 echo "=============================================="
-$PY scripts/gym_2d/eval_gym.py \
+$PY scripts/gym_2d/evaluate_mc_dropout.py \
   --gym_data "$GYM_DATA" \
   --checkpoint "$OUTPUT_DIR/ntu120_xsub_baseline/best.pt" \
   --out_file "$OUTPUT_DIR/uncertainty/gym_frozen_mc.npz" \
@@ -120,7 +120,7 @@ test -f "$GYM_FT_DIR/best.pt" || die "Missing fine-tuned checkpoint: $GYM_FT_DIR
 echo "=============================================="
 echo "Evaluate fine-tuned model"
 echo "=============================================="
-$PY scripts/gym_2d/eval_gym.py \
+$PY scripts/gym_2d/evaluate_mc_dropout.py \
   --gym_data "$GYM_DATA" \
   --checkpoint "$GYM_FT_DIR/best.pt" \
   --out_file "$OUTPUT_DIR/uncertainty/gym_finetuned_mc.npz" \
