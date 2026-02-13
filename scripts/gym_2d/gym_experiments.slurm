@@ -136,5 +136,3 @@ $PY scripts/gym_2d/run_ablation.py \
   --data_path "$GYM_DATA" \
   --out_dir "$OUTPUT_DIR/ablation" \
   --mc_passes "5,10,15,20"
-
-
