@@ -23,18 +23,8 @@ Ensure your data is placed in the following structure:
 data/raw/skeleton/
 ├── ntu120/
 │   └── ntu120_3d.pkl  <-- NTU120 3D Skeleton Data
-└── kinetics400/
-    ├── k400_2d.pkl    <-- Kinetics 400 Metadata
-    └── kpfiles/       <-- Kinetics 400 Skeleton Files
-```
-
-**Note for Kinetics Data:**
-The Kinetics skeleton files usually come in a zip file. Use the helper script to extract them:
-
-```bash
-# Unzip Kinetics 400 data
-chmod +x scripts/unzip_kinetics.sh
-./scripts/unzip_kinetics.sh
+└── gym/
+    └── gym_2d.pkl     <-- Gym 2D Skeleton Data
 ```
 
 ### 3. Running the Code
@@ -63,8 +53,6 @@ Run specific tests to ensure the data loaders are working correctly (shapes, nor
 # Test NTU120 Loader
 poetry run python scripts/test_loader.py
 
-# Test Kinetics Loader
-poetry run python scripts/test_kinetics.py
 ```
 #### Step 4: Full Training (NTU120)
 Train the full Skeleton Transformer on the official `xsub` split.
@@ -108,7 +96,7 @@ poetry run python scripts/stress_tests.py
 ## 📂 Project Structure
 
 - **`src/gymbuddy/`**: Main source code.
-  - **`data/loaders/`**: Dataset implementations (`ntu120.py`, `kinetics_skeleton.py`).
+  - **`data/loaders/`**: Dataset implementations (`ntu120.py`).
   - **`models/`**: Neural network models (`baseline.py`, `transformer.py`).
   - **`uncertainty/`**: Uncertainty estimation modules (`mc_dropout.py`).
 - **`scripts/`**: Helper scripts for inspection, training, and testing.
@@ -131,9 +119,7 @@ This project makes use of the following datasets:
 - **Citation**:
   > Liu, J., Shahroudy, A., Perez, M., Wang, G., Duan, L. Y., & Kot, A. C. (2019). NTU RGB+D 120: A Large-Scale Benchmark for 3D Human Activity Understanding. IEEE Transactions on Pattern Analysis and Machine Intelligence.
 
-### Kinetics 400
-- **Constraint**: Used for 2D skeleton pre-training/metadata.
-- **Metadata**: [k400_hrnet.pkl](https://download.openmmlab.com/mmaction/pyskl/data/k400/k400_hrnet.pkl)
-- **Skeletons**: [OpenXLab - Kinetics400-skeleton](https://openxlab.org.cn/datasets/OpenMMLab/Kinetics400-skeleton)
-- **Citation**:
-  > Kay, W., Carreira, J., Simonyan, K., Zhang, B., Hillier, C., Vijayanarasimhan, S., ... & Zisserman, A. (2017). The kinetics human action video dataset. arXiv preprint arXiv:1705.06950.
+### Gym 2D (Private Collection)
+- **Constraint**: Used for finetuning/adaptation test.
+- **Source**: Collected via standard RGB camera, processed with MMPose (RTMPose).
+- **Format**: 2D Keypoints (COCO 17-keypoint format).

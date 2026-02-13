@@ -39,15 +39,14 @@ Ensure your data is organized as follows on Anvil:
 /anvil/scratch/<username>/ai-gym-buddy/data/raw/skeleton/
 ├── ntu120/
 │   └── ntu120_3d.pkl
-└── kinetics400/
-    ├── k400_2d.pkl
-    └── kpfiles/...
+└── gym/
+    └── gym_2d.pkl
 ```
 
 **Sanity Check:**
 ```bash
 ls -lh "$DATA_ROOT/ntu120"
-ls -lh "$DATA_ROOT/kinetics400"
+ls -lh "$DATA_ROOT/gym"
 du -sh "$DATA_ROOT"
 ```
 
