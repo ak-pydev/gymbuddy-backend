@@ -69,7 +69,7 @@ def eval_mc(debug=False, out_file=None, data_path=None, checkpoint=None, num_cla
     
     if not os.path.exists(checkpoint_path):
         print(f"Checkpoint not found at {checkpoint_path}.")
-        return
+        sys.exit(1)
 
     # Load Model (Ensure d_model match)
     print(f"Loading model with num_classes={num_classes}, dropout={dropout} from {checkpoint_path}...")
@@ -87,7 +87,7 @@ def eval_mc(debug=False, out_file=None, data_path=None, checkpoint=None, num_cla
             model.load_state_dict(ckpt)
     except Exception as e:
         print(f"Error loading checkpoint: {e}")
-        return
+        sys.exit(1)
 
     model.to(device)
     
