@@ -10,6 +10,7 @@
 #SBATCH --mem=32G
 
 
+set -euo pipefail
 mkdir -p logs
 
 REPO_DIR="/home/x-akhanal3/gymbuddy-backend"
@@ -27,7 +28,7 @@ $PY scripts/train_full_ntu.py \
   --split xsub \
   --epochs 50 \
   --lr 3e-4 \
-  --dropout 0.1 \
+  --dropout 0.1
 
 # -------------------------
 # Evaluate MC Dropout
