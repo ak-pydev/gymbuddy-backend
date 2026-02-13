@@ -128,4 +128,13 @@ $PY scripts/gym_2d/qualitative_analysis.py \
   --gym_data "$GYM_DATA" \
   --out_dir "$OUTPUT_DIR"
 
+echo "=============================================="
+echo "PAPER POLISH: Ablation Study"
+echo "=============================================="
+$PY scripts/gym_2d/run_ablation.py \
+  --checkpoint "$OUTPUT_DIR/gym_finetuned_head/best.pt" \
+  --data_path "$GYM_DATA" \
+  --out_dir "$OUTPUT_DIR/ablation" \
+  --mc_passes "5,10,15,20"
+
 
