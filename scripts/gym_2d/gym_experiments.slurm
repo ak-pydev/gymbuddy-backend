@@ -102,4 +102,30 @@ echo "=============================================="
 echo "ALL EXPERIMENTS COMPLETE"
 echo "=============================================="
 
+echo "=============================================="
+echo "PAPER POLISH: Training Curves"
+echo "=============================================="
+$PY scripts/gym_2d/plot_training_curves.py --outputs_dir "$OUTPUT_DIR"
+
+echo "=============================================="
+echo "PAPER POLISH: Latency Benchmark"
+echo "=============================================="
+$PY scripts/gym_2d/benchmark_latency.py --outputs_dir "$OUTPUT_DIR"
+
+echo "=============================================="
+echo "PAPER POLISH: Per-Class Analysis (Gym)"
+echo "=============================================="
+$PY scripts/gym_2d/analyze_per_class.py \
+  --mc_file "$OUTPUT_DIR/uncertainty/gym_finetuned_mc.npz" \
+  --out_dir "$OUTPUT_DIR" \
+  --dataset_name "Gym_Finetuned"
+
+echo "=============================================="
+echo "PAPER POLISH: Qualitative Analysis"
+echo "=============================================="
+$PY scripts/gym_2d/qualitative_analysis.py \
+  --mc_file "$OUTPUT_DIR/uncertainty/gym_finetuned_mc.npz" \
+  --gym_data "$GYM_DATA" \
+  --out_dir "$OUTPUT_DIR"
+
 
