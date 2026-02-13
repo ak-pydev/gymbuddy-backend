@@ -51,7 +51,7 @@ NTU_MC_FILE="$OUTPUT_DIR/uncertainty/ntu120_xsub_mc.npz"
 if [ -f "$NTU_MC_FILE" ]; then
     echo "✅ NTU MC output already exists. Skipping..."
 else
-    python scripts/eval_mc_dropout.py \
+    python3 scripts/eval_mc_dropout.py \
       --checkpoint "$CHECKPOINT" \
       --data_path "$DATA_ROOT/ntu120/ntu120_3d.pkl" \
       --split "xsub_val" \
@@ -64,7 +64,7 @@ fi
 echo ""
 echo "=== Step 2: Gym Zero-Shot Evaluation ==="
 GYM_FROZEN_MC="$OUTPUT_DIR/uncertainty/gym_frozen_mc.npz"
-python scripts/gym_2d/evaluate_mc_dropout.py \
+python3 scripts/gym_2d/evaluate_mc_dropout.py \
   --gym_data "$GYM_DATA" \
   --checkpoint "$CHECKPOINT" \
   --out_file "$GYM_FROZEN_MC" \
@@ -74,10 +74,10 @@ python scripts/gym_2d/evaluate_mc_dropout.py \
 echo ""
 echo "=== Step 3: Gym Finetuning ==="
 # Determine device for training command
-python scripts/gym_2d/finetune_gym.py \
+python3 scripts/gym_2d/finetune_gym.py \
   --gym_data "$GYM_DATA" \
   --checkpoint "$CHECKPOINT" \
-  --output_dir "$OUTPUT_DIR/gym_finetune" \
+  --out_dir "$OUTPUT_DIR/gym_finetune" \
   --epochs 10 \
   --lr 1e-4
 
@@ -88,7 +88,7 @@ GYM_FT_CHECKPOINT="$OUTPUT_DIR/gym_finetune/best.pt"
 GYM_FT_MC="$OUTPUT_DIR/uncertainty/gym_finetuned_mc.npz"
 
 if [ -f "$GYM_FT_CHECKPOINT" ]; then
-    python scripts/gym_2d/evaluate_mc_dropout.py \
+    python3 scripts/gym_2d/evaluate_mc_dropout.py \
       --gym_data "$GYM_DATA" \
       --checkpoint "$GYM_FT_CHECKPOINT" \
       --out_file "$GYM_FT_MC" \
@@ -100,15 +100,20 @@ fi
 # 7. Analysis
 echo ""
 echo "=== Step 5: Analysis & Plots ==="
-python scripts/gym_2d/compare_domains.py \
+python3 scripts/gym_2d/compare_domains.py \
   --ntu_mc "$NTU_MC_FILE" \
   --gym_mc "$GYM_FROZEN_MC" \
-  --output_dir "$OUTPUT_DIR"
+  --out_dir "$OUTPUT_DIR"
 
-python scripts/gym_2d/run_gating_sweep.py \
-  --ntu_mc "$NTU_MC_FILE" \
-  --gym_mc "$GYM_FROZEN_MC" \
-  --output_dir "$OUTPUT_DIR"
+python3 scripts/gym_2d/run_gating_sweep.py \
+  --mc_file "$GYM_FROZEN_MC" \
+  --out_dir "$OUTPUT_DIR/gating_frozen" \
+  --dataset_name "Gym-Frozen"
+
+python3 scripts/gym_2d/run_gating_sweep.py \
+  --mc_file "$GYM_FT_MC" \
+  --out_dir "$OUTPUT_DIR/gating_finetuned" \
+  --dataset_name "Gym-Finetuned"
 
 echo ""
 echo "🎉 Pipeline Complete! Results in $OUTPUT_DIR"

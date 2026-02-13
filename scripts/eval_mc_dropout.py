@@ -130,6 +130,7 @@ def eval_mc(debug=False, out_file=None, data_path=None, checkpoint=None, num_cla
     print("Inference Complete.")
 
 
+if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--debug', action='store_true', help='Run on a small subset')
