@@ -165,6 +165,65 @@ def plot_robustness_curves(csv_path, out_dir):
     
     print(f"Robustness plots saved to {out_dir}")
 
+def plot_uncertainty_histograms(uncertainty, errors, out_path, title="Uncertainty Histogram"):
+    plt.figure(figsize=(8, 6))
+    u_correct = uncertainty[errors == 0]
+    u_wrong = uncertainty[errors == 1]
+    
+    plt.hist(u_correct, bins=30, alpha=0.5, label='Correct', density=True)
+    plt.hist(u_wrong, bins=30, alpha=0.5, label='Wrong', density=True)
+    
+    plt.xlabel("Uncertainty / Energy")
+    plt.ylabel("Density")
+    plt.title(title)
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.savefig(out_path)
+    plt.close()
+
+def compute_risk_coverage_curve(uncertainty, errors):
+    """
+    Compute Risk vs Coverage.
+    Lower uncertainty -> Higher confidence -> retained first.
+    """
+    # Sort by uncertainty (low to high = high confidence to low)
+    sorted_indices = np.argsort(uncertainty)
+    sorted_errors = errors[sorted_indices]
+    
+    n = len(errors)
+    coverages = []
+    risks = []
+    
+    # Iterate thresholds
+    # Efficiently: cumulative sum
+    cum_errors = np.cumsum(sorted_errors)
+    cum_samples = np.arange(1, n + 1)
+    
+    risks = cum_errors / cum_samples
+    coverages = cum_samples / n
+    
+    return coverages, risks
+
+def plot_risk_coverage(uncertainty, errors, out_path, title="Risk-Coverage Curve"):
+    coverages, risks = compute_risk_coverage_curve(uncertainty, errors)
+    
+    # Compute AUC
+    # We want low risk at high coverage.
+    # A perfect model has 0 risk until coverage=accuracy.
+    # auc = np.trapz(risks, coverages) # Deprecated in numpy 2.0
+    auc = np.sum((risks[:-1] + risks[1:]) / 2 * np.diff(coverages))
+    
+    plt.figure(figsize=(6, 6))
+    plt.plot(coverages, risks, label=f"AUC = {auc:.4f}")
+    plt.xlabel("Coverage")
+    plt.ylabel("Risk (Error Rate on Retained)")
+    plt.title(title)
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.ylim(0, 1.05)
+    plt.savefig(out_path)
+    plt.close()
+
 def make_plots():
     parser = argparse.ArgumentParser(description='Generate calibration and analysis plots')
     parser.add_argument('--mc_file', type=str, help='Path to MC dropout .npz output', default=None)
@@ -181,6 +240,12 @@ def make_plots():
         probs = data['p_mean']
         uncertainty = data['u_epistemic']
         labels = data['y_true']
+        
+        # Check for energy
+        energy = None
+        if 'energy' in data:
+             energy = data['energy']
+             print("Found Energy scores.")
         
         # ECE
         ece, (accs, confs, counts) = compute_ece(probs, labels)
@@ -202,6 +267,40 @@ def make_plots():
         
         # Confusion Matrix
         plot_confusion_matrix(probs, labels, os.path.join(args.out_dir, "confusion_matrix.png"))
+        
+        # New Plots
+        print("Generating Uncertainty Histograms and Risk-Coverage Curves...")
+        
+        # 1. Epistemic Uncertainty
+        plot_uncertainty_histograms(uncertainty, errors, os.path.join(args.out_dir, "hist_uncertainty.png"), title="Epistemic Uncertainty Histogram")
+        plot_risk_coverage(uncertainty, errors, os.path.join(args.out_dir, "rc_uncertainty.png"), title="Risk-Coverage (Epistemic)")
+        
+        # 2. Energy Score (if available)
+        if energy is not None:
+            # Energy: Lower is better (more confident ID)? 
+            # predict_mc returns "mean_energy". 
+            # In predict_mc: mean_energy = -logsumexp(logits). 
+            # Low Energy (negative large number?) means high logsumexp means high confidence.
+            # Wait, Energy E(x) = -T*LogSumExp. 
+            # If LogSumExp is high (confident), Energy is Low (very negative).
+            # So "Low Energy" = "High Confidence".
+            # My compute_risk_coverage_curve sorts "uncertainty" low to high.
+            # If I pass Energy directly, it sorts from Most Negative (High Conf) to Least Negative (Low Conf).
+            # This is correct: Low Energy (Most Negative) comes first (Retained).
+            
+            plot_uncertainty_histograms(energy, errors, os.path.join(args.out_dir, "hist_energy.png"), title="Energy Score Histogram")
+            plot_risk_coverage(energy, errors, os.path.join(args.out_dir, "rc_energy.png"), title="Risk-Coverage (Energy)")
+            
+            # Also Max Prob (Baseline Confidence)
+            # Confidence = Max Prob. 
+            # We want to sort by High Confidence.
+            # Convert to "Uncertainty" metric: 1 - Confidence? Or -Confidence.
+            # compute_risk_coverage sorts low to high.
+            # So we use -Confidence.
+        
+        confidences = np.max(probs, axis=1)
+        neg_conf = -confidences
+        plot_risk_coverage(neg_conf, errors, os.path.join(args.out_dir, "rc_maxprob.png"), title="Risk-Coverage (MaxProb)")
         
     elif args.mc_file:
          print(f"Warning: --mc_file was provided but not found at {args.mc_file}")

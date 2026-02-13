@@ -101,7 +101,7 @@ def eval_mc(debug=False, out_file=None, data_path=None, checkpoint=None, num_cla
     val_loader = DataLoader(val_ds, batch_size=32, shuffle=False)
     
     print(f"Running MC Dropout Prediction (N={n_passes})...")
-    probs, uncertainty, labels = predict_mc(model, val_loader, n_passes=n_passes, device=device)
+    probs, uncertainty, labels, energy = predict_mc(model, val_loader, n_passes=n_passes, device=device)
     
     # Compute predictions (y_pred) from mean probabilities
     y_pred = np.argmax(probs, axis=1)
@@ -113,7 +113,8 @@ def eval_mc(debug=False, out_file=None, data_path=None, checkpoint=None, num_cla
                  p_mean=probs, 
                  u_epistemic=uncertainty, 
                  y_true=labels, 
-                 y_pred=y_pred)
+                 y_pred=y_pred,
+                 energy=energy)
         
         if os.path.exists(output_file):
              print(f"SUCCESS: File created at {output_file} ({os.path.getsize(output_file)} bytes)")
