@@ -72,7 +72,7 @@ $PY -c "import torch; print('CUDA:', torch.cuda.is_available())"
 echo "=== (1) MC DROPOUT EVAL ==="
 $PY scripts/eval_mc_dropout.py \
   --checkpoint "${CKPT}" \
-  --split ntu \
+  --split xsub_val \
   --n_passes 20 \
   --dropout 0.1 \
   --out "${MC_OUT}"
