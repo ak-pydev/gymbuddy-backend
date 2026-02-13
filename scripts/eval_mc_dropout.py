@@ -110,11 +110,23 @@ def eval_mc(debug=False, out_file=None, data_path=None, checkpoint=None, num_cla
     
     # Save raw results
     print(f"Saving results to {output_file}...")
-    np.savez(output_file, 
-             p_mean=probs, 
-             u_epistemic=uncertainty, 
-             y_true=labels, 
-             y_pred=y_pred)
+    try:
+        np.savez(output_file, 
+                 p_mean=probs, 
+                 u_epistemic=uncertainty, 
+                 y_true=labels, 
+                 y_pred=y_pred)
+        
+        if os.path.exists(output_file):
+             print(f"SUCCESS: File created at {output_file} ({os.path.getsize(output_file)} bytes)")
+        else:
+             print(f"ERROR: np.savez completed but file not found at {output_file}")
+             sys.exit(1)
+             
+    except Exception as e:
+        print(f"ERROR saving file: {e}")
+        sys.exit(1)
+        
     print("Inference Complete.")
 
 
@@ -133,8 +145,8 @@ def eval_mc(debug=False, out_file=None, data_path=None, checkpoint=None, num_cla
     # Actually, let's explicitly add --out if out_file is the only "out"
     args = parser.parse_args()
     
-    # Handle --out vs --out_file ambiguity if user used --out in SLURM
-    # The SLURM used --out, which matches --out_file if unique.
+    print(f"DEBUG: args={args}")
+    print(f"DEBUG: out_file={args.out_file}")
     
     eval_mc(debug=args.debug, out_file=args.out_file,
             data_path=args.data_path, checkpoint=args.checkpoint, num_classes=args.num_classes,

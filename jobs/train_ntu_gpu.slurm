@@ -38,12 +38,19 @@ UNC_DIR="${OUTPUT_DIR}/uncertainty"
 mkdir -p "${UNC_DIR}"
 MC_OUT="${UNC_DIR}/ntu120_xsub_mc.npz"
 
+echo "=== Pre-Eval Check: Listing ${UNC_DIR} ==="
+ls -l "${UNC_DIR}" || echo "Directory empty or does not exist yet"
+
+echo "Running eval_mc_dropout.py..."
 $PY scripts/eval_mc_dropout.py \
   --checkpoint "${OUTPUT_DIR}/ntu120_xsub_baseline/best.pt" \
   --split xsub_val \
   --n_passes 20 \
   --dropout 0.1 \
   --out_file "${MC_OUT}"
+
+echo "=== Post-Eval Check: Listing ${UNC_DIR} ==="
+ls -l "${UNC_DIR}"
 
 test -f "${MC_OUT}" || { echo "MC output not found: ${MC_OUT}"; exit 1; }
 
