@@ -48,7 +48,7 @@ def compute_ece(probs, labels, n_bins=10):
 
 
 
-def eval_mc(debug=False, out_file=None, data_path=None, checkpoint=None, num_classes=120):
+def eval_mc(debug=False, out_file=None, data_path=None, checkpoint=None, num_classes=120, split='xsub_val', n_passes=20, dropout=0.5):
     device = 'mps' if torch.backends.mps.is_available() else 'cpu'
     
     # Path to checkpoint
@@ -72,8 +72,8 @@ def eval_mc(debug=False, out_file=None, data_path=None, checkpoint=None, num_cla
         return
 
     # Load Model (Ensure d_model match)
-    print(f"Loading model with num_classes={num_classes} from {checkpoint_path}...")
-    model = SkeletonTransformer(num_classes=num_classes, d_model=256, nhead=4, num_layers=4, dropout=0.5)
+    print(f"Loading model with num_classes={num_classes}, dropout={dropout} from {checkpoint_path}...")
+    model = SkeletonTransformer(num_classes=num_classes, d_model=256, nhead=4, num_layers=4, dropout=dropout)
     
     try:
         if device == 'cpu':
@@ -92,8 +92,8 @@ def eval_mc(debug=False, out_file=None, data_path=None, checkpoint=None, num_cla
     model.to(device)
     
     # Dataset (Val)
-    print("Initializing NTU Validation Dataset...")
-    val_ds = NTU120Dataset(data_path=data_path, split='xsub_val', target_frames=60)
+    print(f"Initializing NTU Validation Dataset (split={split})...")
+    val_ds = NTU120Dataset(data_path=data_path, split=split, target_frames=60)
     
     if debug:
         print("DEBUG MODE: Using subset of 50 samples")
@@ -102,8 +102,8 @@ def eval_mc(debug=False, out_file=None, data_path=None, checkpoint=None, num_cla
         
     val_loader = DataLoader(val_ds, batch_size=32, shuffle=False)
     
-    print(f"Running MC Dropout Prediction (N=20)...")
-    probs, uncertainty, labels = predict_mc(model, val_loader, n_passes=20, device=device)
+    print(f"Running MC Dropout Prediction (N={n_passes})...")
+    probs, uncertainty, labels = predict_mc(model, val_loader, n_passes=n_passes, device=device)
     
     # Compute predictions (y_pred) from mean probabilities
     y_pred = np.argmax(probs, axis=1)
@@ -125,8 +125,18 @@ def eval_mc(debug=False, out_file=None, data_path=None, checkpoint=None, num_cla
     parser.add_argument('--data_path', type=str, default=None, help='Path to dataset pkl')
     parser.add_argument('--checkpoint', type=str, default=None, help='Path to model checkpoint')
     parser.add_argument('--num_classes', type=int, default=120, help='Number of classes (default 120 for NTU)')
+    parser.add_argument('--split', type=str, default='xsub_val', help='Dataset split')
+    parser.add_argument('--n_passes', type=int, default=20, help='Number of MC passes')
+    parser.add_argument('--dropout', type=float, default=0.5, help='Dropout rate')
+    # Support --out as alias for --out_file by creating a widely permissive parser
+    # But argparse usually handles prefix matching. Let's just rely on that or user can fix SLURM. 
+    # Actually, let's explicitly add --out if out_file is the only "out"
     args = parser.parse_args()
-            
+    
+    # Handle --out vs --out_file ambiguity if user used --out in SLURM
+    # The SLURM used --out, which matches --out_file if unique.
+    
     eval_mc(debug=args.debug, out_file=args.out_file,
-            data_path=args.data_path, checkpoint=args.checkpoint, num_classes=args.num_classes)
+            data_path=args.data_path, checkpoint=args.checkpoint, num_classes=args.num_classes,
+            split=args.split, n_passes=args.n_passes, dropout=args.dropout)
 
