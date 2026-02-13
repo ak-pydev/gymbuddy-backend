@@ -76,10 +76,8 @@ def eval_mc(debug=False, out_file=None, data_path=None, checkpoint=None, num_cla
     model = SkeletonTransformer(num_classes=num_classes, d_model=256, nhead=4, num_layers=4, dropout=dropout)
     
     try:
-        if device == 'cpu':
-             ckpt = torch.load(checkpoint_path, map_location='cpu')
-        else:
-             ckpt = torch.load(checkpoint_path)
+        # Load with map_location to handle key mismatch (CUDA->CPU/MPS)
+        ckpt = torch.load(checkpoint_path, map_location=device)
              
         if 'model_state_dict' in ckpt:
             model.load_state_dict(ckpt['model_state_dict'])
